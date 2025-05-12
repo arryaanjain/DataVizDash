@@ -1,3 +1,5 @@
 build-essential
 gcc
 g++
+cmake
+libc-dev

@@ -4,7 +4,16 @@ Utility functions for time series forecasting.
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
-from prophet import Prophet
+# Import Prophet with error handling for NumPy 2.0 compatibility
+try:
+    # Try to patch NumPy for Prophet compatibility
+    if hasattr(np, 'float_') is False and hasattr(np, 'float64'):
+        np.float_ = np.float64
+    from prophet import Prophet
+except (ImportError, AttributeError) as e:
+    import warnings
+    warnings.warn(f"Prophet import error: {e}. Forecasting functionality may be limited.")
+    Prophet = None
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 def train_arima_model(data, p=1, d=1, q=0):

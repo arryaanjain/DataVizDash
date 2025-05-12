@@ -9,9 +9,15 @@ from utils.data_utils import create_download_link
 
 # Try to import Prophet, but handle the case where it's not available
 try:
+    # Try to patch NumPy for Prophet compatibility
+    import numpy as np
+    if hasattr(np, 'float_') is False and hasattr(np, 'float64'):
+        np.float_ = np.float64
     from prophet import Prophet
     PROPHET_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError) as e:
+    import warnings
+    warnings.warn(f"Prophet import error: {e}. Forecasting functionality may be limited.")
     PROPHET_AVAILABLE = False
 
 def show_prophet_forecast(ts_data, target_col):
