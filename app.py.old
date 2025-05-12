@@ -1,0 +1,1268 @@
+import streamlit as st
+from streamlit_option_menu import option_menu
+from streamlit_extras.switch_page_button import switch_page
+from streamlit_extras.colored_header import colored_header
+from streamlit_extras.card import card
+from streamlit_extras.toggle_switch import st_toggle_switch
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import os
+import sys
+import base64
+from datetime import datetime, timedelta
+import io
+from PIL import Image
+import uuid
+import tempfile
+
+# Advanced analytics and forecasting imports
+import statsmodels.api as sm
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.seasonal import seasonal_decompose
+from prophet import Prophet
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+import matplotlib.dates as mdates
+
+# Must be the first Streamlit command
+st.set_page_config(
+    page_title="Data Visualizer",
+    page_icon="�",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Define color schemes for light and dark mode
+light_theme = {
+    "navy_blue": "#0A2342",
+    "gold": "#F5A623",
+    "slate_gray": "#708090",
+    "light_gray": "#F5F5F5",
+    "white": "#FFFFFF",
+    "dark_blue": "#001233",
+    "background": "#F5F5F5",
+    "text": "#0A2342",
+    "card_bg": "#FFFFFF",
+    "sidebar_bg": "#0A2342",
+    "sidebar_text": "#FFFFFF"
+}
+
+dark_theme = {
+    "navy_blue": "#0A2342",
+    "gold": "#F5A623",
+    "slate_gray": "#708090",
+    "light_gray": "#1E1E1E",
+    "white": "#2D2D2D",
+    "dark_blue": "#001233",
+    "background": "#121212",
+    "text": "#F5F5F5",
+    "card_bg": "#2D2D2D",
+    "sidebar_bg": "#0A2342",
+    "sidebar_text": "#F5F5F5"
+}
+
+# Initialize session state for dark mode if it doesn't exist
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = False
+
+# Function to get current theme based on dark mode setting
+def get_current_theme():
+    return dark_theme if st.session_state.dark_mode else light_theme
+
+# Custom CSS for styling
+def apply_custom_css(theme):
+    st.markdown(f"""
+    <style>
+        /* Color palette */
+        :root {{
+            --navy-blue: {theme["navy_blue"]};
+            --gold: {theme["gold"]};
+            --slate-gray: {theme["slate_gray"]};
+            --light-gray: {theme["light_gray"]};
+            --white: {theme["white"]};
+            --dark-blue: {theme["dark_blue"]};
+            --background: {theme["background"]};
+            --text: {theme["text"]};
+            --card-bg: {theme["card_bg"]};
+        }}
+
+        /* Main background and text */
+        .main {{
+            background-color: var(--background);
+            color: var(--text);
+        }}
+
+        /* Sidebar styling */
+        .css-1d391kg, .css-1cypcdb {{
+            background-color: {theme["sidebar_bg"]};
+            color: {theme["sidebar_text"]};
+        }}
+
+        /* Headers */
+        h1, h2, h3 {{
+            color: var(--text);
+            font-weight: bold;
+        }}
+
+        /* Cards */
+        .card {{
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: var(--card-bg);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }}
+
+        .card:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }}
+
+        /* KPI cards */
+        .kpi-card {{
+            background-color: var(--navy-blue);
+            color: var(--white);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }}
+
+        .kpi-card:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }}
+
+        .kpi-value {{
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--gold);
+        }}
+
+        .kpi-label {{
+            font-size: 14px;
+            color: var(--light-gray);
+        }}
+
+        /* Upload area */
+        .upload-area {{
+            border: 2px dashed var(--slate-gray);
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: var(--card-bg);
+            transition: all 0.3s ease;
+        }}
+
+        .upload-area:hover {{
+            border-color: var(--gold);
+            background-color: rgba(245, 166, 35, 0.05);
+        }}
+
+        /* Buttons */
+        .stButton>button {{
+            background-color: var(--navy-blue);
+            color: var(--white);
+            border-radius: 5px;
+            border: none;
+            padding: 8px 16px;
+            transition: all 0.3s ease;
+        }}
+
+        .stButton>button:hover {{
+            background-color: var(--gold);
+            color: var(--navy-blue);
+        }}
+
+        /* Tooltip */
+        .tooltip {{
+            position: relative;
+            display: inline-block;
+        }}
+
+        .tooltip .tooltiptext {{
+            visibility: hidden;
+            width: 120px;
+            background-color: var(--navy-blue);
+            color: var(--white);
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }}
+
+        .tooltip:hover .tooltiptext {{
+            visibility: visible;
+            opacity: 1;
+        }}
+
+        /* Data table */
+        .dataframe {{
+            border-collapse: collapse;
+            width: 100%;
+            border-radius: 5px;
+            overflow: hidden;
+        }}
+
+        .dataframe th {{
+            background-color: var(--navy-blue);
+            color: var(--white);
+            padding: 12px;
+            text-align: left;
+        }}
+
+        .dataframe td {{
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            background-color: var(--card-bg);
+            color: var(--text);
+        }}
+
+        .dataframe tr:nth-child(even) {{
+            background-color: rgba(0, 0, 0, 0.05);
+        }}
+
+        .dataframe tr:hover {{
+            background-color: rgba(245, 166, 35, 0.05);
+        }}
+
+        /* Tabs styling */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 8px;
+        }}
+
+        .stTabs [data-baseweb="tab"] {{
+            background-color: var(--card-bg);
+            color: var(--text);
+            border-radius: 5px 5px 0 0;
+            padding: 10px 20px;
+            border: none;
+        }}
+
+        .stTabs [aria-selected="true"] {{
+            background-color: var(--navy-blue) !important;
+            color: var(--white) !important;
+        }}
+
+        /* Search box */
+        .search-box {{
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--slate-gray);
+            width: 100%;
+            background-color: var(--card-bg);
+            color: var(--text);
+        }}
+
+        /* Animation for charts */
+        .chart-container {{
+            transition: all 0.5s ease;
+        }}
+
+        .chart-container:hover {{
+            transform: scale(1.01);
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# Apply the current theme
+apply_custom_css(get_current_theme())
+
+# Helper functions for advanced analytics and forecasting
+
+def create_download_link(df, filename, text):
+    """Generate a link to download the dataframe as a CSV file"""
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
+    return href
+
+def detect_date_columns(df):
+    """Detect potential date columns in the dataframe"""
+    date_cols = []
+
+    # Check for datetime dtypes
+    datetime_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+    date_cols.extend(datetime_cols)
+
+    # Check for object columns that might be dates
+    for col in df.select_dtypes(include=['object']).columns:
+        # Try to convert to datetime
+        try:
+            pd.to_datetime(df[col], errors='raise')
+            date_cols.append(col)
+        except:
+            pass
+
+    return date_cols
+
+def prepare_time_series_data(df, date_col, value_col):
+    """Prepare data for time series analysis"""
+    # Ensure date column is datetime
+    df = df.copy()
+    df[date_col] = pd.to_datetime(df[date_col])
+
+    # Sort by date
+    df = df.sort_values(by=date_col)
+
+    # Set date as index
+    df_ts = df[[date_col, value_col]].set_index(date_col)
+
+    # Resample to ensure regular time intervals (monthly)
+    df_ts = df_ts.resample('M').mean()
+
+    # Fill missing values
+    df_ts = df_ts.fillna(method='ffill')
+
+    return df_ts
+
+def train_arima_model(data, p=1, d=1, q=0):
+    """Train an ARIMA model on the data"""
+    model = ARIMA(data, order=(p, d, q))
+    model_fit = model.fit()
+    return model_fit
+
+def train_prophet_model(data, date_col, value_col):
+    """Train a Prophet model on the data"""
+    # Prepare data for Prophet
+    df_prophet = pd.DataFrame({
+        'ds': data.index,
+        'y': data[value_col]
+    })
+
+    # Create and train model
+    model = Prophet(yearly_seasonality=True,
+                   weekly_seasonality=True,
+                   daily_seasonality=False)
+    model.fit(df_prophet)
+
+    return model
+
+def generate_forecast(model, periods=12, model_type='arima'):
+    """Generate forecast using the trained model"""
+    if model_type == 'arima':
+        forecast = model.forecast(steps=periods)
+        forecast_df = pd.DataFrame({
+            'date': pd.date_range(start=model.data.index[-1] + pd.DateOffset(months=1), periods=periods, freq='M'),
+            'forecast': forecast
+        })
+        forecast_df.set_index('date', inplace=True)
+
+    elif model_type == 'prophet':
+        future = model.make_future_dataframe(periods=periods, freq='M')
+        forecast = model.predict(future)
+        forecast_df = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(periods)
+        forecast_df = forecast_df.rename(columns={'ds': 'date', 'yhat': 'forecast',
+                                                 'yhat_lower': 'lower_bound',
+                                                 'yhat_upper': 'upper_bound'})
+        forecast_df.set_index('date', inplace=True)
+
+    return forecast_df
+
+def evaluate_forecast(actual, predicted):
+    """Evaluate forecast performance"""
+    mse = mean_squared_error(actual, predicted)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(actual, predicted)
+    r2 = r2_score(actual, predicted)
+
+    return {
+        'MSE': mse,
+        'RMSE': rmse,
+        'MAE': mae,
+        'R²': r2
+    }
+
+def create_pie_chart(df, column):
+    """Create a pie chart for categorical data"""
+    value_counts = df[column].value_counts()
+
+    # If there are too many categories, keep only top 5 and group others
+    if len(value_counts) > 5:
+        top_5 = value_counts.head(5)
+        others = pd.Series({'Others': value_counts[5:].sum()})
+        value_counts = pd.concat([top_5, others])
+
+    fig = px.pie(
+        names=value_counts.index,
+        values=value_counts.values,
+        title=f'Distribution of {column}',
+        color_discrete_sequence=px.colors.qualitative.Set3,
+        hole=0.3,  # Make it a donut chart
+    )
+
+    fig.update_traces(textposition='inside', textinfo='percent+label')
+    fig.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+        margin=dict(t=50, b=100, l=20, r=20),
+    )
+
+    return fig
+
+def create_stacked_bar(df, x_col, y_col, color_col):
+    """Create a stacked bar chart"""
+    fig = px.bar(
+        df,
+        x=x_col,
+        y=y_col,
+        color=color_col,
+        title=f'{y_col} by {x_col} and {color_col}',
+        barmode='stack'
+    )
+
+    fig.update_layout(
+        xaxis_title=x_col,
+        yaxis_title=y_col,
+        legend_title=color_col,
+        margin=dict(t=50, b=50, l=20, r=20),
+    )
+
+    return fig
+
+def create_line_chart(df, x_col, y_col, color_col=None):
+    """Create a line chart for trend analysis"""
+    if color_col:
+        fig = px.line(
+            df,
+            x=x_col,
+            y=y_col,
+            color=color_col,
+            title=f'Trend of {y_col} over {x_col}',
+            markers=True
+        )
+    else:
+        fig = px.line(
+            df,
+            x=x_col,
+            y=y_col,
+            title=f'Trend of {y_col} over {x_col}',
+            markers=True
+        )
+
+    fig.update_layout(
+        xaxis_title=x_col,
+        yaxis_title=y_col,
+        margin=dict(t=50, b=50, l=20, r=20),
+    )
+
+    return fig
+
+def create_area_chart(df, x_col, y_col, color_col=None):
+    """Create an area chart"""
+    if color_col:
+        fig = px.area(
+            df,
+            x=x_col,
+            y=y_col,
+            color=color_col,
+            title=f'Area Chart of {y_col} over {x_col}'
+        )
+    else:
+        fig = px.area(
+            df,
+            x=x_col,
+            y=y_col,
+            title=f'Area Chart of {y_col} over {x_col}'
+        )
+
+    fig.update_layout(
+        xaxis_title=x_col,
+        yaxis_title=y_col,
+        margin=dict(t=50, b=50, l=20, r=20),
+    )
+
+    return fig
+
+def create_box_plot(df, x_col, y_col):
+    """Create a box plot"""
+    fig = px.box(
+        df,
+        x=x_col,
+        y=y_col,
+        title=f'Box Plot of {y_col} by {x_col}'
+    )
+
+    fig.update_layout(
+        xaxis_title=x_col,
+        yaxis_title=y_col,
+        margin=dict(t=50, b=50, l=20, r=20),
+    )
+
+    return fig
+
+def create_kpi_card(title, value, delta=None, delta_suffix="vs previous period"):
+    """Create a KPI card with a metric"""
+    st.metric(
+        label=title,
+        value=value,
+        delta=delta,
+        delta_color="normal",
+        help=f"{title} {delta_suffix}" if delta else None,
+    )
+
+def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
+    """Create a comparative chart for multiple metrics"""
+    if chart_type == 'bar':
+        fig = go.Figure()
+
+        for col in y_cols:
+            fig.add_trace(go.Bar(
+                x=df[x_col],
+                y=df[col],
+                name=col
+            ))
+
+        fig.update_layout(
+            title=f'Comparison of {", ".join(y_cols)} by {x_col}',
+            xaxis_title=x_col,
+            yaxis_title='Value',
+            barmode='group',
+            margin=dict(t=50, b=50, l=20, r=20),
+        )
+
+    elif chart_type == 'line':
+        fig = go.Figure()
+
+        for col in y_cols:
+            fig.add_trace(go.Scatter(
+                x=df[x_col],
+                y=df[col],
+                mode='lines+markers',
+                name=col
+            ))
+
+        fig.update_layout(
+            title=f'Comparison of {", ".join(y_cols)} by {x_col}',
+            xaxis_title=x_col,
+            yaxis_title='Value',
+            margin=dict(t=50, b=50, l=20, r=20),
+        )
+
+    return fig
+
+# App title and description
+colored_header(
+    label="Data Visualizer",
+    description="Upload an Excel file to visualize and analyze your financial data",
+    color_name="blue-70"
+)
+
+# Add a sidebar with navigation
+with st.sidebar:
+    st.header("Navigation")
+
+    # Create sidebar navigation
+    selected_section = option_menu(
+        menu_title=None,
+        options=["Data Preview", "Statistical Details", "Data Visualization", "Advanced Analytics", "Forecasting"],
+        icons=["table", "calculator", "bar-chart-fill", "graph-up", "calendar-check"],
+        menu_icon="cast",
+        default_index=0,
+    )
+
+    # Store the selected section in session state
+    if 'selected_section' not in st.session_state:
+        st.session_state.selected_section = selected_section
+    else:
+        st.session_state.selected_section = selected_section
+
+# File uploader
+uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
+
+if uploaded_file is not None:
+    # Load the data
+    try:
+        # Try to install openpyxl if it's not available
+        try:
+            import openpyxl
+        except ImportError:
+            st.warning("Attempting to install openpyxl...")
+            import subprocess
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "openpyxl"])
+            st.success("OpenPyXL installed successfully! Please reload the page.")
+            import openpyxl
+
+        # Try different engines for reading Excel
+        try:
+            df = pd.read_excel(uploaded_file, engine='openpyxl')
+        except Exception as e1:
+            st.warning(f"Error with openpyxl engine: {e1}")
+            try:
+                df = pd.read_excel(uploaded_file, engine='xlrd')
+                st.success("Successfully read file with xlrd engine")
+            except Exception as e2:
+                st.warning(f"Error with xlrd engine: {e2}")
+                # Last resort - try without specifying engine
+                df = pd.read_excel(uploaded_file)
+
+        # Store dataframe in session state for access across tabs
+        st.session_state.df = df
+
+        # Select columns for visualization (used across tabs)
+        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+        categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+
+        # Display content based on selected section
+        if selected_section == "Data Preview":
+            st.subheader("Data Preview")
+            st.dataframe(df.head(10))
+
+            st.subheader("Data Information")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Rows:** {df.shape[0]}")
+                st.write(f"**Columns:** {df.shape[1]}")
+            with col2:
+                st.write("**Column Types:**")
+                st.write(df.dtypes)
+
+        elif selected_section == "Statistical Details":
+            st.subheader("Data Statistics")
+            st.write(df.describe())
+
+            # Show correlation heatmap if there are not too many columns (to avoid clutter)
+            if 1 < len(numeric_cols) <= 10:
+                st.subheader("Correlation Heatmap")
+                fig, ax = plt.subplots(figsize=(10, 8))
+                correlation = df[numeric_cols].corr()
+                sns.heatmap(correlation, annot=True, cmap='coolwarm', ax=ax)
+                plt.title('Correlation Heatmap')
+                st.pyplot(fig)
+
+        elif selected_section == "Data Visualization":
+            st.subheader("Data Visualization")
+
+            # Create tabs for different visualization types
+            viz_tabs = st.tabs(["Numeric", "Categorical", "Relationships", "Rich Visuals"])
+
+            # Numeric data visualization tab
+            with viz_tabs[0]:
+                if numeric_cols:
+                    st.write("### Numeric Data Visualization")
+
+                    # Histogram
+                    selected_num_col = st.selectbox("Select a numeric column for histogram", numeric_cols)
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    sns.histplot(df[selected_num_col].dropna(), kde=True, ax=ax)
+                    plt.title(f'Histogram of {selected_num_col}')
+                    st.pyplot(fig)
+                else:
+                    st.info("No numeric columns found in the data.")
+
+            # Categorical data visualization tab
+            with viz_tabs[1]:
+                if categorical_cols:
+                    st.write("### Categorical Data Visualization")
+
+                    selected_cat_col = st.selectbox("Select a categorical column for count plot", categorical_cols)
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    value_counts = df[selected_cat_col].value_counts().sort_values(ascending=False).head(10)
+                    sns.barplot(x=value_counts.index, y=value_counts.values, ax=ax)
+                    plt.title(f'Count Plot of {selected_cat_col} (Top 10)')
+                    plt.xticks(rotation=45, ha='right')
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                else:
+                    st.info("No categorical columns found in the data.")
+
+            # Relationships visualization tab
+            with viz_tabs[2]:
+                if len(numeric_cols) >= 2:
+                    st.write("### Scatter Plot")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        x_col = st.selectbox("Select X-axis column", numeric_cols)
+                    with col2:
+                        y_col = st.selectbox("Select Y-axis column", numeric_cols, index=1 if len(numeric_cols) > 1 else 0)
+
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    sns.scatterplot(data=df, x=x_col, y=y_col, ax=ax)
+                    plt.title(f'Scatter Plot: {x_col} vs {y_col}')
+                    st.pyplot(fig)
+                else:
+                    st.info("At least two numeric columns are required for relationship plots.")
+
+            # Rich Visuals tab
+            with viz_tabs[3]:
+                st.write("### Rich Graphical Visuals")
+
+                # Select visualization type
+                viz_type = st.selectbox(
+                    "Select Visualization Type",
+                    ["Pie Chart", "Line Chart", "Area Chart", "Box Plot", "Stacked Bar Chart"]
+                )
+
+                if viz_type == "Pie Chart":
+                    if categorical_cols:
+                        pie_col = st.selectbox("Select column for pie chart", categorical_cols)
+                        pie_fig = create_pie_chart(df, pie_col)
+                        st.plotly_chart(pie_fig, use_container_width=True)
+                    else:
+                        st.info("No categorical columns found for pie chart.")
+
+                elif viz_type == "Line Chart":
+                    if numeric_cols:
+                        date_cols = detect_date_columns(df)
+                        if date_cols:
+                            x_col = st.selectbox("Select X-axis (date) column", date_cols)
+                            y_col = st.selectbox("Select Y-axis column for line chart", numeric_cols)
+
+                            color_col = None
+                            if categorical_cols:
+                                use_color = st.checkbox("Use color grouping")
+                                if use_color:
+                                    color_col = st.selectbox("Select column for color grouping", categorical_cols)
+
+                            line_fig = create_line_chart(df, x_col, y_col, color_col)
+                            st.plotly_chart(line_fig, use_container_width=True)
+                        else:
+                            st.warning("No date columns detected for line chart. Please select columns manually.")
+                            x_col = st.selectbox("Select X-axis column", numeric_cols)
+                            y_col = st.selectbox("Select Y-axis column for line chart",
+                                                numeric_cols, index=1 if len(numeric_cols) > 1 else 0)
+
+                            line_fig = create_line_chart(df, x_col, y_col)
+                            st.plotly_chart(line_fig, use_container_width=True)
+                    else:
+                        st.info("No numeric columns found for line chart.")
+
+                elif viz_type == "Area Chart":
+                    if numeric_cols:
+                        date_cols = detect_date_columns(df)
+                        if date_cols:
+                            x_col = st.selectbox("Select X-axis (date) column", date_cols)
+                            y_col = st.selectbox("Select Y-axis column for area chart", numeric_cols)
+
+                            color_col = None
+                            if categorical_cols:
+                                use_color = st.checkbox("Use color grouping")
+                                if use_color:
+                                    color_col = st.selectbox("Select column for color grouping", categorical_cols)
+
+                            area_fig = create_area_chart(df, x_col, y_col, color_col)
+                            st.plotly_chart(area_fig, use_container_width=True)
+                        else:
+                            st.warning("No date columns detected for area chart. Please select columns manually.")
+                            x_col = st.selectbox("Select X-axis column", numeric_cols)
+                            y_col = st.selectbox("Select Y-axis column for area chart",
+                                                numeric_cols, index=1 if len(numeric_cols) > 1 else 0)
+
+                            area_fig = create_area_chart(df, x_col, y_col)
+                            st.plotly_chart(area_fig, use_container_width=True)
+                    else:
+                        st.info("No numeric columns found for area chart.")
+
+                elif viz_type == "Box Plot":
+                    if numeric_cols and categorical_cols:
+                        x_col = st.selectbox("Select X-axis (categorical) column", categorical_cols)
+                        y_col = st.selectbox("Select Y-axis (numeric) column for box plot", numeric_cols)
+
+                        box_fig = create_box_plot(df, x_col, y_col)
+                        st.plotly_chart(box_fig, use_container_width=True)
+                    else:
+                        st.info("Box plots require both numeric and categorical columns.")
+
+                elif viz_type == "Stacked Bar Chart":
+                    if numeric_cols and categorical_cols:
+                        x_col = st.selectbox("Select X-axis column", categorical_cols)
+                        y_col = st.selectbox("Select Y-axis (numeric) column", numeric_cols)
+
+                        if len(categorical_cols) >= 2:
+                            color_col = st.selectbox("Select column for stacking",
+                                                    [c for c in categorical_cols if c != x_col])
+
+                            # Prepare data for stacked bar chart
+                            agg_df = df.groupby([x_col, color_col])[y_col].sum().reset_index()
+
+                            stacked_fig = create_stacked_bar(agg_df, x_col, y_col, color_col)
+                            st.plotly_chart(stacked_fig, use_container_width=True)
+                        else:
+                            st.info("Stacked bar charts require at least 2 categorical columns.")
+                    else:
+                        st.info("Stacked bar charts require both numeric and categorical columns.")
+
+                # Download option
+                if st.button("Download Visualization Data"):
+                    st.markdown(create_download_link(df, "visualization_data.csv",
+                                                   "Click here to download the data"), unsafe_allow_html=True)
+
+        elif selected_section == "Advanced Analytics":
+            st.subheader("Advanced Analytics")
+
+            # Create tabs for different analytics features
+            analytics_tabs = st.tabs(["KPI Dashboard", "Comparative Analysis", "Statistical Models"])
+
+            # KPI Dashboard tab
+            with analytics_tabs[0]:
+                st.write("### Key Performance Indicators")
+
+                if numeric_cols:
+                    # Select columns for KPIs
+                    kpi_cols = st.multiselect("Select columns for KPIs", numeric_cols,
+                                             default=numeric_cols[:min(4, len(numeric_cols))])
+
+                    if kpi_cols:
+                        # Create KPI cards in a grid
+                        cols = st.columns(len(kpi_cols))
+
+                        for i, col in enumerate(kpi_cols):
+                            with cols[i]:
+                                current_val = df[col].mean()
+
+                                # Try to calculate change if possible
+                                delta = None
+                                date_cols = detect_date_columns(df)
+                                if date_cols:
+                                    try:
+                                        # Sort by date and compare current vs previous period
+                                        date_col = date_cols[0]
+                                        df_sorted = df.sort_values(by=date_col)
+                                        half_point = len(df_sorted) // 2
+                                        prev_val = df_sorted.iloc[:half_point][col].mean()
+                                        current_val = df_sorted.iloc[half_point:][col].mean()
+                                        delta = f"{((current_val - prev_val) / prev_val * 100):.1f}%"
+                                    except:
+                                        pass
+
+                                # Format value based on magnitude
+                                if abs(current_val) >= 1e6:
+                                    formatted_val = f"{current_val/1e6:.2f}M"
+                                elif abs(current_val) >= 1e3:
+                                    formatted_val = f"{current_val/1e3:.2f}K"
+                                else:
+                                    formatted_val = f"{current_val:.2f}"
+
+                                create_kpi_card(col, formatted_val, delta)
+
+                        # Add summary statistics
+                        st.write("### Summary Statistics")
+                        st.dataframe(df[kpi_cols].describe())
+                    else:
+                        st.info("Please select at least one column for KPIs.")
+                else:
+                    st.info("No numeric columns found for KPIs.")
+
+            # Comparative Analysis tab
+            with analytics_tabs[1]:
+                st.write("### Comparative Analysis")
+
+                if numeric_cols:
+                    # Select columns for comparison
+                    y_cols = st.multiselect("Select metrics to compare", numeric_cols,
+                                           default=numeric_cols[:min(3, len(numeric_cols))])
+
+                    if y_cols and len(y_cols) >= 2:
+                        # Select X-axis column
+                        x_options = categorical_cols + detect_date_columns(df)
+                        if x_options:
+                            x_col = st.selectbox("Select X-axis for comparison", x_options)
+
+                            # Select chart type
+                            chart_type = st.radio("Select chart type", ["bar", "line"], horizontal=True)
+
+                            # Create comparative chart
+                            comp_fig = create_comparative_chart(df, x_col, y_cols, chart_type)
+                            st.plotly_chart(comp_fig, use_container_width=True)
+
+                            # Add year-over-year or category-wise comparison table
+                            st.write("### Comparison Table")
+
+                            # Group by the X column and calculate statistics for each Y column
+                            comparison_df = df.groupby(x_col)[y_cols].agg(['mean', 'min', 'max', 'std']).reset_index()
+                            st.dataframe(comparison_df)
+
+                            # Download option
+                            if st.button("Download Comparison Data"):
+                                st.markdown(create_download_link(comparison_df, "comparison_data.csv",
+                                                               "Click here to download the comparison data"),
+                                           unsafe_allow_html=True)
+                        else:
+                            st.info("No suitable X-axis columns found for comparison.")
+                    else:
+                        st.info("Please select at least two metrics for comparison.")
+                else:
+                    st.info("No numeric columns found for comparative analysis.")
+
+            # Statistical Models tab
+            with analytics_tabs[2]:
+                st.write("### Statistical Models")
+
+                if len(numeric_cols) >= 2:
+                    # Select target variable
+                    target_col = st.selectbox("Select target variable", numeric_cols)
+
+                    # Select features
+                    feature_cols = st.multiselect("Select feature variables",
+                                                 [col for col in numeric_cols if col != target_col],
+                                                 default=[col for col in numeric_cols[:min(3, len(numeric_cols))]
+                                                         if col != target_col])
+
+                    if feature_cols:
+                        # Train a simple linear regression model
+                        st.write("#### Linear Regression Model")
+
+                        # Prepare data
+                        X = df[feature_cols]
+                        y = df[target_col]
+
+                        # Split data
+                        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+                        # Train model
+                        model = LinearRegression()
+                        model.fit(X_train, y_train)
+
+                        # Make predictions
+                        y_pred = model.predict(X_test)
+
+                        # Evaluate model
+                        metrics = {
+                            'R² Score': r2_score(y_test, y_pred),
+                            'Mean Squared Error': mean_squared_error(y_test, y_pred),
+                            'Root Mean Squared Error': np.sqrt(mean_squared_error(y_test, y_pred)),
+                            'Mean Absolute Error': mean_absolute_error(y_test, y_pred)
+                        }
+
+                        # Display model coefficients
+                        coef_df = pd.DataFrame({
+                            'Feature': feature_cols,
+                            'Coefficient': model.coef_
+                        })
+
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            st.write("Model Coefficients")
+                            st.dataframe(coef_df)
+
+                        with col2:
+                            st.write("Model Performance Metrics")
+                            metrics_df = pd.DataFrame({
+                                'Metric': list(metrics.keys()),
+                                'Value': list(metrics.values())
+                            })
+                            st.dataframe(metrics_df)
+
+                        # Plot actual vs predicted values
+                        fig = px.scatter(
+                            x=y_test,
+                            y=y_pred,
+                            labels={'x': 'Actual Values', 'y': 'Predicted Values'},
+                            title='Actual vs Predicted Values'
+                        )
+
+                        # Add diagonal line (perfect predictions)
+                        min_val = min(y_test.min(), y_pred.min())
+                        max_val = max(y_test.max(), y_pred.max())
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[min_val, max_val],
+                                y=[min_val, max_val],
+                                mode='lines',
+                                line=dict(color='red', dash='dash'),
+                                name='Perfect Prediction'
+                            )
+                        )
+
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # Interactive prediction
+                        st.write("#### Interactive Prediction")
+                        st.write("Adjust the values below to get a prediction:")
+
+                        # Create sliders for each feature
+                        input_values = {}
+                        for feature in feature_cols:
+                            min_val = float(df[feature].min())
+                            max_val = float(df[feature].max())
+                            mean_val = float(df[feature].mean())
+
+                            step = (max_val - min_val) / 100
+                            input_values[feature] = st.slider(
+                                f"{feature}",
+                                min_value=min_val,
+                                max_value=max_val,
+                                value=mean_val,
+                                step=step
+                            )
+
+                        # Make prediction with input values
+                        input_df = pd.DataFrame([input_values])
+                        prediction = model.predict(input_df)[0]
+
+                        st.write(f"### Predicted {target_col}: **{prediction:.2f}**")
+                    else:
+                        st.info("Please select at least one feature variable.")
+                else:
+                    st.info("Statistical modeling requires at least two numeric columns.")
+
+        elif selected_section == "Forecasting":
+            st.subheader("Time Series Forecasting")
+
+            # Detect date columns
+            date_cols = detect_date_columns(df)
+
+            if date_cols:
+                # Check if we have enough data for forecasting (at least 5 years)
+                date_col = st.selectbox("Select date column", date_cols)
+
+                # Convert to datetime and check range
+                df[date_col] = pd.to_datetime(df[date_col])
+                date_range = df[date_col].max() - df[date_col].min()
+
+                # Select target variable for forecasting
+                target_col = st.selectbox("Select column to forecast", numeric_cols)
+
+                # Prepare time series data
+                ts_data = prepare_time_series_data(df, date_col, target_col)
+
+                # Display the time series data
+                st.write("### Time Series Data")
+                st.line_chart(ts_data)
+
+                # Check if we have enough data for forecasting
+                if len(ts_data) >= 24:  # At least 2 years of monthly data
+                    # Create tabs for different forecasting methods
+                    forecast_tabs = st.tabs(["ARIMA Forecast", "Prophet Forecast", "Forecast Comparison"])
+
+                    # ARIMA Forecast tab
+                    with forecast_tabs[0]:
+                        st.write("### ARIMA Forecast")
+
+                        # ARIMA parameters
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            p = st.slider("p (AR order)", 0, 5, 1)
+                        with col2:
+                            d = st.slider("d (Differencing)", 0, 2, 1)
+                        with col3:
+                            q = st.slider("q (MA order)", 0, 5, 0)
+
+                        # Forecast horizon
+                        periods = st.slider("Forecast periods (months)", 3, 24, 12)
+
+                        # Train-test split for evaluation
+                        train_size = int(len(ts_data) * 0.8)
+                        train_data = ts_data.iloc[:train_size]
+                        test_data = ts_data.iloc[train_size:]
+
+                        # Train ARIMA model
+                        try:
+                            with st.spinner("Training ARIMA model..."):
+                                model = train_arima_model(train_data, p, d, q)
+
+                                # Generate forecast for test period
+                                test_forecast = model.forecast(steps=len(test_data))
+
+                                # Evaluate forecast
+                                metrics = evaluate_forecast(test_data.values, test_forecast)
+
+                                # Display metrics
+                                st.write("#### Model Performance")
+                                metrics_df = pd.DataFrame({
+                                    'Metric': list(metrics.keys()),
+                                    'Value': list(metrics.values())
+                                })
+                                st.dataframe(metrics_df)
+
+                                # Train on full dataset for future forecast
+                                full_model = train_arima_model(ts_data, p, d, q)
+
+                                # Generate future forecast
+                                forecast_df = generate_forecast(full_model, periods, 'arima')
+
+                                # Plot historical data and forecast
+                                fig = go.Figure()
+
+                                # Historical data
+                                fig.add_trace(go.Scatter(
+                                    x=ts_data.index,
+                                    y=ts_data[target_col],
+                                    mode='lines',
+                                    name='Historical Data',
+                                    line=dict(color='blue')
+                                ))
+
+                                # Forecast
+                                fig.add_trace(go.Scatter(
+                                    x=forecast_df.index,
+                                    y=forecast_df['forecast'],
+                                    mode='lines',
+                                    name='Forecast',
+                                    line=dict(color='red', dash='dash')
+                                ))
+
+                                fig.update_layout(
+                                    title=f'ARIMA Forecast for {target_col}',
+                                    xaxis_title='Date',
+                                    yaxis_title=target_col,
+                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                                )
+
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # Display forecast data
+                                st.write("#### Forecast Values")
+                                st.dataframe(forecast_df)
+
+                                # Download forecast
+                                if st.button("Download ARIMA Forecast"):
+                                    st.markdown(create_download_link(forecast_df.reset_index(),
+                                                                   "arima_forecast.csv",
+                                                                   "Click here to download the forecast"),
+                                               unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"Error in ARIMA modeling: {e}")
+                            st.info("Try different parameters or a different model.")
+
+                    # Prophet Forecast tab
+                    with forecast_tabs[1]:
+                        st.write("### Prophet Forecast")
+
+                        # Forecast horizon
+                        prophet_periods = st.slider("Prophet forecast periods (months)", 3, 24, 12, key="prophet_periods")
+
+                        # Train Prophet model
+                        try:
+                            with st.spinner("Training Prophet model..."):
+                                # Prepare data for Prophet
+                                prophet_data = pd.DataFrame({
+                                    'ds': ts_data.index,
+                                    'y': ts_data[target_col]
+                                })
+
+                                # Train-test split
+                                train_size = int(len(prophet_data) * 0.8)
+                                train_data = prophet_data.iloc[:train_size]
+                                test_data = prophet_data.iloc[train_size:]
+
+                                # Train model
+                                model = Prophet(yearly_seasonality=True,
+                                              weekly_seasonality=True,
+                                              daily_seasonality=False)
+                                model.fit(train_data)
+
+                                # Generate forecast for test period
+                                future = model.make_future_dataframe(periods=len(test_data), freq='M')
+                                forecast = model.predict(future)
+
+                                # Evaluate forecast
+                                test_forecast = forecast.tail(len(test_data))
+                                metrics = evaluate_forecast(test_data['y'].values, test_forecast['yhat'].values)
+
+                                # Display metrics
+                                st.write("#### Model Performance")
+                                metrics_df = pd.DataFrame({
+                                    'Metric': list(metrics.keys()),
+                                    'Value': list(metrics.values())
+                                })
+                                st.dataframe(metrics_df)
+
+                                # Train on full dataset for future forecast
+                                full_model = Prophet(yearly_seasonality=True,
+                                                   weekly_seasonality=True,
+                                                   daily_seasonality=False)
+                                full_model.fit(prophet_data)
+
+                                # Generate future forecast
+                                future = full_model.make_future_dataframe(periods=prophet_periods, freq='M')
+                                forecast = full_model.predict(future)
+
+                                # Plot components
+                                fig_comp = full_model.plot_components(forecast)
+                                st.write("#### Forecast Components")
+                                st.pyplot(fig_comp)
+
+                                # Plot forecast
+                                fig = go.Figure()
+
+                                # Historical data
+                                fig.add_trace(go.Scatter(
+                                    x=prophet_data['ds'],
+                                    y=prophet_data['y'],
+                                    mode='lines',
+                                    name='Historical Data',
+                                    line=dict(color='blue')
+                                ))
+
+                                # Forecast
+                                fig.add_trace(go.Scatter(
+                                    x=forecast['ds'].tail(prophet_periods),
+                                    y=forecast['yhat'].tail(prophet_periods),
+                                    mode='lines',
+                                    name='Forecast',
+                                    line=dict(color='red')
+                                ))
+
+                                # Confidence interval
+                                fig.add_trace(go.Scatter(
+                                    x=pd.concat([forecast['ds'].tail(prophet_periods),
+                                               forecast['ds'].tail(prophet_periods).iloc[::-1]]),
+                                    y=pd.concat([forecast['yhat_upper'].tail(prophet_periods),
+                                               forecast['yhat_lower'].tail(prophet_periods).iloc[::-1]]),
+                                    fill='toself',
+                                    fillcolor='rgba(0,176,246,0.2)',
+                                    line=dict(color='rgba(255,255,255,0)'),
+                                    name='Confidence Interval'
+                                ))
+
+                                fig.update_layout(
+                                    title=f'Prophet Forecast for {target_col}',
+                                    xaxis_title='Date',
+                                    yaxis_title=target_col,
+                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                                )
+
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # Display forecast data
+                                st.write("#### Forecast Values")
+                                forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(prophet_periods)
+                                forecast_display.columns = ['Date', 'Forecast', 'Lower Bound', 'Upper Bound']
+                                st.dataframe(forecast_display)
+
+                                # Download forecast
+                                if st.button("Download Prophet Forecast"):
+                                    st.markdown(create_download_link(forecast_display,
+                                                                   "prophet_forecast.csv",
+                                                                   "Click here to download the forecast"),
+                                               unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"Error in Prophet modeling: {e}")
+                            st.info("Prophet may require additional setup or a different data structure.")
+
+                    # Forecast Comparison tab
+                    with forecast_tabs[2]:
+                        st.write("### Forecast Comparison")
+                        st.info("Train both ARIMA and Prophet models in their respective tabs to enable comparison.")
+
+                        # This would be implemented to compare forecasts from different models
+                        # For now, we'll just provide a placeholder
+                        st.write("This tab will show a comparison of forecasts from different models once they are trained.")
+                else:
+                    st.warning(f"Not enough data for reliable forecasting. Found {len(ts_data)} data points, but at least 24 are recommended.")
+                    st.info("Consider using a different date column or aggregating your data differently.")
+            else:
+                st.warning("No date columns detected in the data. Forecasting requires time series data.")
+                st.info("Please upload a dataset with at least one date/time column.")
+
+    except Exception as e:
+        st.error(f"Error reading the file: {e}")
+else:
+    st.info("Please upload an Excel file to begin.")
+
