@@ -554,8 +554,27 @@ def create_box_plot(df, x_col, y_col):
 
     return fig
 
-def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
-    """Create a comparative chart for multiple metrics with enhanced value labels and summary statistics."""
+def create_comparative_chart(df, x_col, y_cols, chart_type='bar', aggregation_method='mean'):
+    """Create a comparative chart for multiple metrics with enhanced value labels and summary statistics.
+
+    Parameters:
+    -----------
+    df : pandas DataFrame
+        The dataframe containing the data
+    x_col : str
+        The name of the x-axis column
+    y_cols : list
+        List of column names to plot on the y-axis
+    chart_type : str, optional
+        The type of chart to create ('bar' or 'line')
+    aggregation_method : str, optional
+        The method to use for aggregating values ('mean', 'sum', 'min', 'max')
+    """
+    # Validate aggregation method
+    valid_agg_methods = ['mean', 'sum', 'min', 'max']
+    if aggregation_method not in valid_agg_methods:
+        aggregation_method = 'mean'  # Default to mean if invalid
+
     if chart_type == 'bar':
         fig = go.Figure()
 
@@ -579,7 +598,16 @@ def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
             }
 
         for i, col in enumerate(y_cols):
-            y_values = [df_sorted[df_sorted[x_col] == x_val][col].mean() for x_val in x_values]
+            # Use the selected aggregation method
+            if aggregation_method == 'mean':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].mean() for x_val in x_values]
+            elif aggregation_method == 'sum':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].sum() for x_val in x_values]
+            elif aggregation_method == 'min':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].min() for x_val in x_values]
+            elif aggregation_method == 'max':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].max() for x_val in x_values]
+
             fig.add_trace(go.Bar(
                 x=x_values,
                 y=y_values,
@@ -595,13 +623,14 @@ def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
                 outsidetextfont=dict(color=colors[i])  # Match text color to bar color
             ))
 
-        # Add a more descriptive title
-        title = f'Comparison of {", ".join(y_cols)} by {x_col}'
+        # Add a more descriptive title with aggregation method
+        agg_method_display = aggregation_method.upper()
+        title = f'Comparison of {", ".join(y_cols)} by {x_col} ({agg_method_display})'
 
         fig.update_layout(
             title=title,
             xaxis_title=x_col,
-            yaxis_title='Value',
+            yaxis_title=f'Value ({agg_method_display})',
             barmode='group',
             bargap=0.15,       # Gap between bars of adjacent location coordinates
             bargroupgap=0.1,   # Gap between bars of the same location coordinates
@@ -623,12 +652,18 @@ def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
             ticktext=[str(x) for x in x_values]
         )
 
-        # Add summary statistics annotation
+        # Add summary statistics annotation with highlighted selected method
         summary_text = "<b>Summary Statistics:</b><br>"
         for col in y_cols:
             stats = summary_stats[col]
-            summary_text += f"<b>{col}</b>: Mean={stats['mean']:.2f}, Max={stats['max']:.2f}, "
-            summary_text += f"Min={stats['min']:.2f}, Sum={stats['sum']:.2f}<br>"
+
+            # Format each statistic, highlighting the selected aggregation method
+            mean_text = f"<b>Mean={stats['mean']:.2f}</b>" if aggregation_method == 'mean' else f"Mean={stats['mean']:.2f}"
+            sum_text = f"<b>Sum={stats['sum']:.2f}</b>" if aggregation_method == 'sum' else f"Sum={stats['sum']:.2f}"
+            min_text = f"<b>Min={stats['min']:.2f}</b>" if aggregation_method == 'min' else f"Min={stats['min']:.2f}"
+            max_text = f"<b>Max={stats['max']:.2f}</b>" if aggregation_method == 'max' else f"Max={stats['max']:.2f}"
+
+            summary_text += f"<b>{col}</b>: {mean_text}, {max_text}, {min_text}, {sum_text}<br>"
 
         fig.add_annotation(
             text=summary_text,
@@ -666,7 +701,15 @@ def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
             }
 
         for i, col in enumerate(y_cols):
-            y_values = [df_sorted[df_sorted[x_col] == x_val][col].mean() for x_val in x_values]
+            # Use the selected aggregation method
+            if aggregation_method == 'mean':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].mean() for x_val in x_values]
+            elif aggregation_method == 'sum':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].sum() for x_val in x_values]
+            elif aggregation_method == 'min':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].min() for x_val in x_values]
+            elif aggregation_method == 'max':
+                y_values = [df_sorted[df_sorted[x_col] == x_val][col].max() for x_val in x_values]
 
             # Add main line trace
             fig.add_trace(go.Scatter(
@@ -709,13 +752,14 @@ def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
                     texttemplate='%{text}'
                 ))
 
-        # Add a more descriptive title
-        title = f'Trend Comparison of {", ".join(y_cols)} by {x_col}'
+        # Add a more descriptive title with aggregation method
+        agg_method_display = aggregation_method.upper()
+        title = f'Trend Comparison of {", ".join(y_cols)} by {x_col} ({agg_method_display})'
 
         fig.update_layout(
             title=title,
             xaxis_title=x_col,
-            yaxis_title='Value',
+            yaxis_title=f'Value ({agg_method_display})',
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
@@ -732,12 +776,18 @@ def create_comparative_chart(df, x_col, y_cols, chart_type='bar'):
             tickangle=-45 if len(x_values) > 5 else 0
         )
 
-        # Add summary statistics annotation
+        # Add summary statistics annotation with highlighted selected method
         summary_text = "<b>Summary Statistics:</b><br>"
         for col in y_cols:
             stats = summary_stats[col]
-            summary_text += f"<b>{col}</b>: Mean={stats['mean']:.2f}, Max={stats['max']:.2f}, "
-            summary_text += f"Min={stats['min']:.2f}, Sum={stats['sum']:.2f}<br>"
+
+            # Format each statistic, highlighting the selected aggregation method
+            mean_text = f"<b>Mean={stats['mean']:.2f}</b>" if aggregation_method == 'mean' else f"Mean={stats['mean']:.2f}"
+            sum_text = f"<b>Sum={stats['sum']:.2f}</b>" if aggregation_method == 'sum' else f"Sum={stats['sum']:.2f}"
+            min_text = f"<b>Min={stats['min']:.2f}</b>" if aggregation_method == 'min' else f"Min={stats['min']:.2f}"
+            max_text = f"<b>Max={stats['max']:.2f}</b>" if aggregation_method == 'max' else f"Max={stats['max']:.2f}"
+
+            summary_text += f"<b>{col}</b>: {mean_text}, {max_text}, {min_text}, {sum_text}<br>"
 
         fig.add_annotation(
             text=summary_text,
