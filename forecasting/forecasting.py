@@ -142,8 +142,12 @@ def show_forecasting(df, numeric_cols):
                         try:
                             with st.spinner("Running Prophet forecast..."):
                                 # Import and run Prophet forecast
-                                from forecasting.prophet import show_prophet_forecast
-                                show_prophet_forecast(ts_data, target_col)
+                                from forecasting.prophet import show_prophet_forecast, PROPHET_AVAILABLE
+                                if PROPHET_AVAILABLE:
+                                    show_prophet_forecast(ts_data, target_col)
+                                else:
+                                    st.error("Prophet is not available. Please check your installation.")
+                                    st.info("Prophet may require additional setup. See the [Prophet installation guide](https://facebook.github.io/prophet/docs/installation.html) for more information.")
                         except Exception as e:
                             st.error(f"❌ Error in Prophet forecasting: {str(e)}")
                             with st.expander("Error details", expanded=False):
