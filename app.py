@@ -10,15 +10,9 @@ from config import APP_TITLE, APP_ICON, APP_LAYOUT, INITIAL_SIDEBAR_STATE
 # Version indicator to verify deployment
 APP_VERSION = "1.2.0-sidebyside"  # Update this when making significant changes
 
-# Import deployment verification
-try:
-    from deployment_verification import verify_deployment
-    deployment_info = verify_deployment()
-    # This will be True if the deployment includes the side-by-side chart feature
-    SIDE_BY_SIDE_CHARTS_ENABLED = deployment_info.get("side_by_side_charts_enabled", False)
-except ImportError:
-    # If the deployment_verification module is not present, assume the feature is not enabled
-    SIDE_BY_SIDE_CHARTS_ENABLED = False
+# Set a flag for side-by-side charts (we'll check the actual module later)
+# This avoids import issues that could affect st.set_page_config()
+SIDE_BY_SIDE_CHARTS_ENABLED = True
 
 # Import components
 from components.theme import initialize_theme

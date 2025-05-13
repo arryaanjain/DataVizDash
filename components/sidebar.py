@@ -4,7 +4,6 @@ Sidebar navigation components for the application.
 import streamlit as st
 from streamlit_option_menu import option_menu
 from config import NAV_OPTIONS, NAV_ICONS
-import sys
 
 def create_sidebar():
     """Create the sidebar navigation with data management options."""
@@ -72,12 +71,8 @@ def create_sidebar():
         st.markdown("---")
 
         # Display version information at the bottom of the sidebar
-        try:
-            # Try to import the version from app.py
-            from app import APP_VERSION
-            st.markdown(f"<div style='text-align: center; color: gray; font-size: 0.8em;'>Version: {APP_VERSION}</div>", unsafe_allow_html=True)
-        except ImportError:
-            # Fallback if version is not defined
-            st.markdown("<div style='text-align: center; color: gray; font-size: 0.8em;'>Version: Unknown</div>", unsafe_allow_html=True)
+        # Use a fixed version string to avoid circular imports
+        version = "1.2.0-sidebyside"
+        st.markdown(f"<div style='text-align: center; color: gray; font-size: 0.8em;'>Version: {version}</div>", unsafe_allow_html=True)
 
         return selected_section
