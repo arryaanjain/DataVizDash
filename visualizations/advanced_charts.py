@@ -8,7 +8,29 @@ from visualizations.chart_utils import (
     create_pie_chart, create_area_chart,
     create_box_plot, create_stacked_bar, create_enhanced_time_series_chart
 )
-from visualizations.side_by_side_charts import create_side_by_side_chart
+
+# Import side-by-side chart functionality
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+try:
+    from visualizations.side_by_side_charts import create_side_by_side_chart
+    logger.info("Successfully imported create_side_by_side_chart function")
+except Exception as e:
+    logger.error(f"Error importing create_side_by_side_chart: {str(e)}")
+    # Define a fallback function in case the import fails
+    def create_side_by_side_chart(*args, **kwargs):
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Side-by-side chart functionality could not be loaded. Please check the logs.",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16)
+        )
+        return fig
 from config import RICH_VIZ_TYPES
 
 def show_rich_visualizations(df, numeric_cols, categorical_cols):
@@ -379,6 +401,9 @@ def show_rich_visualizations(df, numeric_cols, categorical_cols):
         st.write("### Side-by-Side Chart")
         st.write("This visualization creates parallel charts for comparing dimensions side by side.")
 
+        # Debug information to help troubleshoot deployment issues
+        st.info("Debug Info: Side-by-Side Chart feature is being loaded. If you see this message but no chart appears, please check the browser console for errors.")
+
         if len(categorical_cols) >= 1 and len(numeric_cols) >= 1:
             # Column selection
             dimension_col = st.selectbox(
@@ -426,18 +451,52 @@ def show_rich_visualizations(df, numeric_cols, categorical_cols):
                 help="Select how to aggregate the data when multiple values exist for the same x-axis category"
             )
 
-            # Create the side-by-side chart
-            side_by_side_fig = create_side_by_side_chart(
-                df,
-                x_col,
-                y_cols,
-                dimension_col,
-                chart_type=chart_type,
-                aggregation_method=aggregation_method
-            )
+            # Create the side-by-side chart with error handling
+            try:
+                st.info(f"Attempting to create side-by-side chart with: dimension_col={dimension_col}, x_col={x_col}, y_cols={y_cols}, chart_type={chart_type}, aggregation_method={aggregation_method}")
 
-            # Display the chart
-            st.plotly_chart(side_by_side_fig, use_container_width=True)
+                side_by_side_fig = create_side_by_side_chart(
+                    df,
+                    x_col,
+                    y_cols,
+                    dimension_col,
+                    chart_type=chart_type,
+                    aggregation_method=aggregation_method
+                )
+
+                # Display the chart
+                st.plotly_chart(side_by_side_fig, use_container_width=True)
+
+                # Confirm successful rendering
+                st.success("Side-by-side chart successfully created and displayed.")
+            except Exception as e:
+                st.error(f"Error creating side-by-side chart: {str(e)}")
+                st.exception(e)  # This will display the full traceback
+
+                # Create a fallback simple chart to show something
+                st.warning("Displaying a simplified fallback chart instead.")
+
+                # Simple fallback chart using basic plotly
+                import plotly.graph_objects as go
+                fig = go.Figure()
+
+                # Add a simple bar for each dimension
+                for dim in df[dimension_col].unique()[:3]:  # Limit to first 3 dimensions
+                    dim_data = df[df[dimension_col] == dim]
+                    if len(dim_data) > 0 and y_cols and y_cols[0] in dim_data.columns:
+                        fig.add_trace(go.Bar(
+                            x=[dim],
+                            y=[dim_data[y_cols[0]].mean()],
+                            name=str(dim)
+                        ))
+
+                fig.update_layout(
+                    title=f"Fallback Chart: Average {y_cols[0] if y_cols else 'value'} by {dimension_col}",
+                    xaxis_title=dimension_col,
+                    yaxis_title=f"Average {y_cols[0] if y_cols else 'value'}"
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
 
             # Add explanatory key points below the chart
             with st.expander("About This Visualization", expanded=True):
