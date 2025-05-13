@@ -43,7 +43,7 @@ NAV_ICONS = ["table", "calculator", "bar-chart-fill", "magic", "graph-up", "cale
 
 # Visualization settings
 VIZ_TABS = ["Numeric", "Categorical", "Relationships", "Rich Visuals"]
-RICH_VIZ_TYPES = ["Pie Chart", "Enhanced Time Series", "Area Chart", "Box Plot", "Stacked Bar Chart"]
+RICH_VIZ_TYPES = ["Pie Chart", "Enhanced Time Series", "Area Chart", "Box Plot", "Stacked Bar Chart", "Side-by-Side Chart"]
 
 # Smart visualization settings
 SMART_CHART_TYPES = [

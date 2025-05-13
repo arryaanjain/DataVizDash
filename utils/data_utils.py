@@ -530,6 +530,17 @@ def prepare_time_series_data(df, date_col, value_col, aggregation='month'):
 
     # Resample based on aggregation parameter
     try:
+        # Check if the index is actually a DatetimeIndex
+        if not isinstance(df_ts.index, pd.DatetimeIndex):
+            raise ValueError("Index is not a DatetimeIndex. Make sure the date column contains valid datetime values.")
+
+        # Check if we have a valid frequency that can be inferred
+        if df_ts.index.inferred_freq is None and len(df_ts) > 1:
+            # No frequency could be inferred, but we'll still try to resample
+            # This is just a warning, not an error
+            st.warning(f"No frequency could be inferred from the date column. Resampling may produce unexpected results.")
+
+        # Perform the resampling based on the aggregation parameter
         if aggregation == 'day':
             df_ts = df_ts.resample('D').mean()
         elif aggregation == 'week':
@@ -540,11 +551,20 @@ def prepare_time_series_data(df, date_col, value_col, aggregation='month'):
             df_ts = df_ts.resample('Q').mean()
         elif aggregation == 'year':
             df_ts = df_ts.resample('Y').mean()
+        elif aggregation == 'none':
+            # No resampling needed
+            pass
         else:
             # Default to monthly
             df_ts = df_ts.resample('ME').mean()
     except Exception as e:
-        raise ValueError(f"Error during time series resampling: {str(e)}")
+        # Provide more detailed error message based on the exception type
+        if "DatetimeIndex" in str(e):
+            raise ValueError(f"Date column must contain valid datetime values: {str(e)}")
+        elif "cannot reindex from a duplicate axis" in str(e):
+            raise ValueError(f"Date column contains duplicate values. Please ensure all dates are unique.")
+        else:
+            raise ValueError(f"Error during time series resampling: {str(e)}")
 
     # Check if resampling resulted in an empty dataframe
     if len(df_ts) == 0:
@@ -620,27 +640,58 @@ def determine_optimal_aggregation(df, date_col):
         The recommended aggregation level ('none', 'day', 'week', 'month', 'quarter', 'year')
     message : str
         A message explaining the aggregation choice
+
+    Raises:
+    -------
+    ValueError
+        If the date column is invalid or cannot be processed
     """
     if df is None or len(df) == 0:
         return 'none', ""
+
+    # Validate date column exists
+    if date_col not in df.columns:
+        raise ValueError(f"Date column '{date_col}' not found in dataframe")
 
     # Ensure date column is datetime
     date_series = df[date_col]
     if not pd.api.types.is_datetime64_any_dtype(date_series):
         try:
             date_series = pd.to_datetime(date_series, errors='coerce')
-        except:
-            return 'none', ""
+
+            # Check if conversion was successful
+            if date_series.isna().all():
+                raise ValueError(f"Could not convert any values in '{date_col}' to valid dates")
+
+            # Check if we have too many NaT values
+            nat_ratio = date_series.isna().mean()
+            if nat_ratio > 0.5:  # More than 50% NaT values
+                raise ValueError(f"Too many invalid date values in '{date_col}' ({nat_ratio:.1%})")
+
+        except Exception as e:
+            if isinstance(e, ValueError) and str(e).startswith("Could not convert") or str(e).startswith("Too many invalid"):
+                raise
+            return 'none', f"Date conversion failed: {str(e)}"
+
+    # Drop NaT values for calculation
+    date_series = date_series.dropna()
+
+    # Check if we have enough data points after dropping NaT values
+    if len(date_series) < 2:
+        return 'none', "Not enough valid date values for aggregation"
 
     # Calculate date range and number of data points
-    date_range = date_series.max() - date_series.min()
-    num_points = len(df)
+    try:
+        date_range = date_series.max() - date_series.min()
+        num_points = len(date_series)
 
-    # Determine density (points per day)
-    if date_range.days == 0:  # Avoid division by zero
-        density = num_points
-    else:
-        density = num_points / date_range.days
+        # Determine density (points per day)
+        if date_range.days == 0:  # Avoid division by zero
+            density = num_points
+        else:
+            density = num_points / date_range.days
+    except Exception as e:
+        return 'none', f"Error calculating date range: {str(e)}"
 
     # Logic for determining aggregation level
     if num_points > 10000:

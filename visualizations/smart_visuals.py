@@ -259,39 +259,54 @@ def create_smart_chart(df, chart_type, chart_options):
 
                 # If user selected "auto", determine optimal aggregation
                 if user_aggregation == "auto":
-                    optimal_aggregation, aggregation_message = determine_optimal_aggregation(df_sorted, x_col)
+                    try:
+                        optimal_aggregation, aggregation_message = determine_optimal_aggregation(df_sorted, x_col)
 
-                    # Apply aggregation if needed
-                    if optimal_aggregation != 'none':
-                        # Group by time period and calculate mean
-                        if optimal_aggregation == 'day':
-                            df_sorted = df_sorted.set_index(x_col).resample('D').mean().reset_index()
-                        elif optimal_aggregation == 'week':
-                            df_sorted = df_sorted.set_index(x_col).resample('W').mean().reset_index()
-                        elif optimal_aggregation == 'month':
-                            df_sorted = df_sorted.set_index(x_col).resample('M').mean().reset_index()
-                        elif optimal_aggregation == 'quarter':
-                            df_sorted = df_sorted.set_index(x_col).resample('Q').mean().reset_index()
-                        elif optimal_aggregation == 'year':
-                            df_sorted = df_sorted.set_index(x_col).resample('Y').mean().reset_index()
+                        # Apply aggregation if needed
+                        if optimal_aggregation != 'none':
+                            # Group by time period and calculate mean
+                            try:
+                                if optimal_aggregation == 'day':
+                                    df_sorted = df_sorted.set_index(x_col).resample('D').mean().reset_index()
+                                elif optimal_aggregation == 'week':
+                                    df_sorted = df_sorted.set_index(x_col).resample('W').mean().reset_index()
+                                elif optimal_aggregation == 'month':
+                                    df_sorted = df_sorted.set_index(x_col).resample('M').mean().reset_index()
+                                elif optimal_aggregation == 'quarter':
+                                    df_sorted = df_sorted.set_index(x_col).resample('Q').mean().reset_index()
+                                elif optimal_aggregation == 'year':
+                                    df_sorted = df_sorted.set_index(x_col).resample('Y').mean().reset_index()
 
-                        aggregation_applied = True
+                                aggregation_applied = True
+                            except Exception as e:
+                                # If resampling fails, log the error and continue without aggregation
+                                st.warning(f"Automatic aggregation failed: {str(e)}. Using raw data instead.")
+                                aggregation_message = "Automatic aggregation failed. Using raw data."
+                    except Exception as e:
+                        # If optimal aggregation detection fails, continue without aggregation
+                        st.warning(f"Could not determine optimal aggregation: {str(e)}. Using raw data instead.")
+                        aggregation_message = "Could not determine optimal aggregation. Using raw data."
                 # If user selected a specific aggregation level
                 elif user_aggregation != 'none':
                     # Apply user-selected aggregation
-                    if user_aggregation == 'day':
-                        df_sorted = df_sorted.set_index(x_col).resample('D').mean().reset_index()
-                    elif user_aggregation == 'week':
-                        df_sorted = df_sorted.set_index(x_col).resample('W').mean().reset_index()
-                    elif user_aggregation == 'month':
-                        df_sorted = df_sorted.set_index(x_col).resample('M').mean().reset_index()
-                    elif user_aggregation == 'quarter':
-                        df_sorted = df_sorted.set_index(x_col).resample('Q').mean().reset_index()
-                    elif user_aggregation == 'year':
-                        df_sorted = df_sorted.set_index(x_col).resample('Y').mean().reset_index()
+                    try:
+                        if user_aggregation == 'day':
+                            df_sorted = df_sorted.set_index(x_col).resample('D').mean().reset_index()
+                        elif user_aggregation == 'week':
+                            df_sorted = df_sorted.set_index(x_col).resample('W').mean().reset_index()
+                        elif user_aggregation == 'month':
+                            df_sorted = df_sorted.set_index(x_col).resample('M').mean().reset_index()
+                        elif user_aggregation == 'quarter':
+                            df_sorted = df_sorted.set_index(x_col).resample('Q').mean().reset_index()
+                        elif user_aggregation == 'year':
+                            df_sorted = df_sorted.set_index(x_col).resample('Y').mean().reset_index()
 
-                    aggregation_applied = True
-                    aggregation_message = f"Data aggregated to {user_aggregation}ly level as selected"
+                        aggregation_applied = True
+                        aggregation_message = f"Data aggregated to {user_aggregation}ly level as selected"
+                    except Exception as e:
+                        # If resampling fails, log the error and continue without aggregation
+                        st.warning(f"{user_aggregation.capitalize()} aggregation failed: {str(e)}. Using raw data instead.")
+                        aggregation_message = f"{user_aggregation.capitalize()} aggregation failed. Using raw data."
 
         # Determine if we should add markers based on data size
         use_markers = len(df_sorted) < 100
@@ -749,6 +764,11 @@ def show_smart_visualizations(df, numeric_cols, categorical_cols):
                     ("year", "Yearly")
                 ]
 
+                # Add a note about raw data option
+                if len(df) > 1000:
+                    st.info("Note: The 'None (raw data)' option may cause performance issues with large datasets.")
+                    st.markdown("For best results with large datasets, use 'Automatic' or select a specific aggregation level.")
+
                 # Default to automatic for large datasets
                 default_aggregation = "auto" if is_large_dataset else "none"
 
@@ -902,12 +922,31 @@ def show_smart_visualizations(df, numeric_cols, categorical_cols):
 
     # Create and display the chart
     with chart_container:
-        fig = create_smart_chart(df, chart_type, chart_options)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
+        try:
+            fig = create_smart_chart(df, chart_type, chart_options)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
 
-            # Add chart explanation
-            st.markdown("### Chart Insights")
+                # Add chart explanation
+                st.markdown("### Chart Insights")
+            else:
+                st.error("Could not create chart with the selected options. Please try different columns or chart type.")
+        except Exception as e:
+            st.error(f"Error creating chart: {str(e)}")
+            st.info("Try selecting different columns or a different chart type. If the issue persists with Time Series charts, check that your date column contains valid dates.")
+            # Create a simple fallback message
+            st.markdown("### Troubleshooting Tips")
+            st.markdown("""
+            For Time Series charts:
+            - Ensure your date column contains valid dates
+            - Try a different aggregation level (e.g., Monthly instead of Automatic)
+            - Check for missing or invalid values in your data
+            """)
+            # Set fig to None so we don't try to access it later
+            fig = None
+
+        # Only proceed with insights if we have a valid figure
+        if fig:
             if chart_type == "Pie Chart":
                 st.markdown(f"""
                 This pie chart shows the distribution of **{chart_options.get('value_col')}** across different
@@ -928,13 +967,20 @@ def show_smart_visualizations(df, numeric_cols, categorical_cols):
 
                 # Add information about data aggregation if applied
                 # Check if aggregation info exists in the figure's layout metadata
-                if fig.layout.get('_aggregation_info', {}).get('applied', False):
-                    aggregation_message = fig.layout.get('_aggregation_info', {}).get('message', '')
-                    if aggregation_message:
-                        description += f"""
+                # Use a try-except block to handle cases where layout properties might not exist
+                try:
+                    if hasattr(fig, 'layout') and hasattr(fig.layout, 'get'):
+                        agg_info = fig.layout.get('_aggregation_info', {})
+                        if isinstance(agg_info, dict) and agg_info.get('applied', False):
+                            aggregation_message = agg_info.get('message', '')
+                            if aggregation_message:
+                                description += f"""
 
-                        **Data Handling:** {aggregation_message}
-                        """
+                                **Data Handling:** {aggregation_message}
+                                """
+                except Exception:
+                    # If accessing the layout properties fails, just continue without the aggregation message
+                    pass
 
                 st.markdown(description)
             elif chart_type == "Scatter Plot":

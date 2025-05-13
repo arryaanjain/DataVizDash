@@ -8,6 +8,7 @@ from visualizations.chart_utils import (
     create_pie_chart, create_area_chart,
     create_box_plot, create_stacked_bar, create_enhanced_time_series_chart
 )
+from visualizations.side_by_side_charts import create_side_by_side_chart
 from config import RICH_VIZ_TYPES
 
 def show_rich_visualizations(df, numeric_cols, categorical_cols):
@@ -373,6 +374,94 @@ def show_rich_visualizations(df, numeric_cols, categorical_cols):
                 st.info("Stacked bar charts require at least 2 categorical columns.")
         else:
             st.info("Stacked bar charts require both numeric and categorical columns.")
+
+    elif viz_type == "Side-by-Side Chart":
+        st.write("### Side-by-Side Chart")
+        st.write("This visualization creates parallel charts for comparing dimensions side by side.")
+
+        if len(categorical_cols) >= 1 and len(numeric_cols) >= 1:
+            # Column selection
+            dimension_col = st.selectbox(
+                "Select Dimension Column (for side-by-side comparison)",
+                categorical_cols,
+                help="This column defines the different dimensions to compare side by side"
+            )
+
+            # Check if we have enough unique values in the dimension column
+            dimension_values = df[dimension_col].unique()
+            if len(dimension_values) < 2:
+                st.warning(f"The selected dimension column '{dimension_col}' needs at least 2 unique values for comparison. This column only has {len(dimension_values)} unique value(s).")
+                return
+
+            x_col = st.selectbox(
+                "Select X-axis Column",
+                categorical_cols,
+                help="This column will be used for the x-axis in each chart"
+            )
+
+            # Multi-select for y-axis columns
+            y_cols = st.multiselect(
+                "Select Y-axis Column(s) (numeric)",
+                numeric_cols,
+                default=[numeric_cols[0]] if numeric_cols else [],
+                help="Select one or more numeric columns to display in the charts"
+            )
+
+            if not y_cols:
+                st.warning("Please select at least one numeric column for the Y-axis.")
+                return
+
+            # Chart type selection
+            chart_type = st.radio(
+                "Chart Type",
+                ["bar", "line"],
+                horizontal=True,
+                help="Select the type of chart to display"
+            )
+
+            # Aggregation method
+            aggregation_method = st.selectbox(
+                "Aggregation Method",
+                ["mean", "sum", "min", "max"],
+                help="Select how to aggregate the data when multiple values exist for the same x-axis category"
+            )
+
+            # Create the side-by-side chart
+            side_by_side_fig = create_side_by_side_chart(
+                df,
+                x_col,
+                y_cols,
+                dimension_col,
+                chart_type=chart_type,
+                aggregation_method=aggregation_method
+            )
+
+            # Display the chart
+            st.plotly_chart(side_by_side_fig, use_container_width=True)
+
+            # Add explanatory key points below the chart
+            with st.expander("About This Visualization", expanded=True):
+                st.markdown(f"""
+                ### Side-by-Side Chart Interpretation
+
+                This visualization shows multiple charts side by side, each representing a different value of **{dimension_col}**. This allows for easy comparison of trends and patterns across different dimensions.
+
+                **Key Points:**
+                - Each chart represents a different value of {dimension_col}
+                - All charts share the same y-axis scale for accurate comparison
+                - The x-axis in each chart shows categories from {x_col}
+                - The y-axis shows the {aggregation_method.upper()} of {', '.join(y_cols)}
+                - Charts are arranged in a grid layout for easy comparison
+
+                **Use this visualization to:**
+                - Compare trends across different dimensions
+                - Identify similarities and differences between categories
+                - Spot patterns that may be consistent or unique across dimensions
+                - Analyze how different metrics perform within each dimension
+                - Pinpoint insights that might be missed in a single combined chart
+                """)
+        else:
+            st.info("Side-by-side charts require at least one categorical column and one numeric column.")
 
     # Download option
     if st.button("Download Visualization Data"):
