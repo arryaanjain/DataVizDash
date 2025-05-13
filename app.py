@@ -7,6 +7,19 @@ from streamlit_extras.colored_header import colored_header
 # Import configuration
 from config import APP_TITLE, APP_ICON, APP_LAYOUT, INITIAL_SIDEBAR_STATE
 
+# Version indicator to verify deployment
+APP_VERSION = "1.2.0-sidebyside"  # Update this when making significant changes
+
+# Import deployment verification
+try:
+    from deployment_verification import verify_deployment
+    deployment_info = verify_deployment()
+    # This will be True if the deployment includes the side-by-side chart feature
+    SIDE_BY_SIDE_CHARTS_ENABLED = deployment_info.get("side_by_side_charts_enabled", False)
+except ImportError:
+    # If the deployment_verification module is not present, assume the feature is not enabled
+    SIDE_BY_SIDE_CHARTS_ENABLED = False
+
 # Import components
 from components.theme import initialize_theme
 from components.sidebar import create_sidebar
@@ -205,6 +218,12 @@ if uploaded_file is not None:
             show_data_statistics(df, numeric_cols)
 
         elif selected_section == "Data Visualization":
+            # Display deployment verification message
+            if SIDE_BY_SIDE_CHARTS_ENABLED:
+                st.success("✅ Side-by-side charts feature is enabled in this deployment.")
+            else:
+                st.warning("⚠️ Side-by-side charts feature may not be available in this deployment. Please check for updates.")
+
             # Add a performance note
             with st.expander("Performance Tips", expanded=False):
                 st.markdown("""
