@@ -9,6 +9,9 @@ font = "sans serif"
 maxUploadSize = 200
 enableCORS = true
 enableXsrfProtection = true
+runOnSave = true
+# Add module reloading to ensure all modules are properly loaded
+enableWebsocketCompression = true
 
 [browser]
 gatherUsageStats = false
