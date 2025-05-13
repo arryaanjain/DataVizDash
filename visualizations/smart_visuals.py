@@ -1,10 +1,13 @@
 """
 Smart visualization components for the application.
 This module provides intelligent chart selection and automatic column detection.
+Enhanced with value display features for all chart types.
 """
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 from utils.data_utils import detect_date_columns
 from config import SMART_CHART_TYPES
 
@@ -176,13 +179,41 @@ def create_smart_chart(df, chart_type, chart_options):
             title=f'Distribution of {value_col} by {category_col}',
             color_discrete_sequence=px.colors.qualitative.Set3,
             hole=0.3,  # Make it a donut chart
+            custom_data=[value_col]  # Add custom data for hover
         )
 
-        # Improve layout
-        fig.update_traces(textposition='inside', textinfo='percent+label')
+        # Improve layout with enhanced value display
+        fig.update_traces(
+            textposition='inside',
+            textinfo='percent+label',
+            hovertemplate='<b>%{label}</b><br>Value: %{value:.2f}<br>Percentage: %{percent}<extra></extra>'
+        )
+
+        # Add total value in the center of donut
+        total_value = value_counts[value_col].sum()
+
+        # Use go.Figure to access the figure for advanced customization
+        fig_go = go.Figure(fig)
+        fig_go.add_annotation(
+            text=f"Total<br>{total_value:.2f}",
+            x=0.5, y=0.5,
+            font=dict(size=14, color="black", family="Arial"),
+            showarrow=False
+        )
+        fig = fig_go
+
         fig.update_layout(
-            margin=dict(t=50, b=50, l=20, r=20),
+            margin=dict(t=50, b=80, l=20, r=20),
             legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+        )
+
+        # Add summary statistics below the chart
+        fig.add_annotation(
+            text=f"Total: {total_value:.2f} | Categories: {len(value_counts)}",
+            xref="paper", yref="paper",
+            x=0.5, y=-0.15,
+            showarrow=False,
+            font=dict(size=12, color="gray")
         )
 
         return fig
@@ -196,25 +227,47 @@ def create_smart_chart(df, chart_type, chart_options):
 
         # Aggregate data - no color grouping
         agg_df = df.groupby(x_col)[y_col].sum().reset_index()
+
+        # Calculate statistics for summary
+        total_value = agg_df[y_col].sum()
+        avg_value = agg_df[y_col].mean()
+        max_value = agg_df[y_col].max()
+        min_value = agg_df[y_col].min()
+
         fig = px.bar(
             agg_df,
             x=x_col,
             y=y_col,
             title=f'{y_col} by {x_col}',
-            text=y_col  # Add value labels
+            text=y_col,  # Add value labels
+            custom_data=[agg_df[y_col]]  # Add custom data for enhanced hover
         )
 
-        # Format the text labels
+        # Format the text labels with improved visibility
         fig.update_traces(
-            texttemplate='%{y:.2f}',
-            textposition='outside'
+            texttemplate='<b>%{y:.2f}</b>',
+            textposition='outside',
+            textfont=dict(size=11, color="black", family="Arial"),
+            hovertemplate='<b>%{x}</b><br>' +
+                          f'{y_col}: ' + '%{y:.2f}<br>' +
+                          f'Percentage of Total: %{{customdata[0] / {total_value} * 100:.1f}}%' +
+                          '<extra></extra>'
         )
 
-        # Improve layout
+        # Improve layout with more information
         fig.update_layout(
             xaxis_title=x_col,
             yaxis_title=y_col,
             margin=dict(t=50, b=100, l=20, r=20),
+        )
+
+        # Add summary statistics below the chart
+        fig.add_annotation(
+            text=f"Total: {total_value:.2f} | Average: {avg_value:.2f} | Max: {max_value:.2f} | Min: {min_value:.2f}",
+            xref="paper", yref="paper",
+            x=0.5, y=-0.15,
+            showarrow=False,
+            font=dict(size=12, color="gray")
         )
 
         # Ensure x-axis labels are properly aligned
@@ -266,16 +319,25 @@ def create_smart_chart(df, chart_type, chart_options):
                         if optimal_aggregation != 'none':
                             # Group by time period and calculate mean
                             try:
+                                # Create a copy of the dataframe with only numeric columns for aggregation
+                                numeric_columns = df_sorted.select_dtypes(include=['number']).columns.tolist()
+
+                                # Make sure y_col is in the numeric columns
+                                if y_col not in numeric_columns:
+                                    st.warning(f"Column '{y_col}' is not numeric and cannot be aggregated.")
+                                    raise ValueError(f"Column '{y_col}' is not numeric")
+
+                                # Set the index and resample
                                 if optimal_aggregation == 'day':
-                                    df_sorted = df_sorted.set_index(x_col).resample('D').mean().reset_index()
+                                    df_sorted = df_sorted.set_index(x_col).resample('D')[numeric_columns].mean().reset_index()
                                 elif optimal_aggregation == 'week':
-                                    df_sorted = df_sorted.set_index(x_col).resample('W').mean().reset_index()
+                                    df_sorted = df_sorted.set_index(x_col).resample('W')[numeric_columns].mean().reset_index()
                                 elif optimal_aggregation == 'month':
-                                    df_sorted = df_sorted.set_index(x_col).resample('M').mean().reset_index()
+                                    df_sorted = df_sorted.set_index(x_col).resample('M')[numeric_columns].mean().reset_index()
                                 elif optimal_aggregation == 'quarter':
-                                    df_sorted = df_sorted.set_index(x_col).resample('Q').mean().reset_index()
+                                    df_sorted = df_sorted.set_index(x_col).resample('Q')[numeric_columns].mean().reset_index()
                                 elif optimal_aggregation == 'year':
-                                    df_sorted = df_sorted.set_index(x_col).resample('Y').mean().reset_index()
+                                    df_sorted = df_sorted.set_index(x_col).resample('Y')[numeric_columns].mean().reset_index()
 
                                 aggregation_applied = True
                             except Exception as e:
@@ -290,16 +352,25 @@ def create_smart_chart(df, chart_type, chart_options):
                 elif user_aggregation != 'none':
                     # Apply user-selected aggregation
                     try:
+                        # Create a copy of the dataframe with only numeric columns for aggregation
+                        numeric_columns = df_sorted.select_dtypes(include=['number']).columns.tolist()
+
+                        # Make sure y_col is in the numeric columns
+                        if y_col not in numeric_columns:
+                            st.warning(f"Column '{y_col}' is not numeric and cannot be aggregated.")
+                            raise ValueError(f"Column '{y_col}' is not numeric")
+
+                        # Set the index and resample
                         if user_aggregation == 'day':
-                            df_sorted = df_sorted.set_index(x_col).resample('D').mean().reset_index()
+                            df_sorted = df_sorted.set_index(x_col).resample('D')[numeric_columns].mean().reset_index()
                         elif user_aggregation == 'week':
-                            df_sorted = df_sorted.set_index(x_col).resample('W').mean().reset_index()
+                            df_sorted = df_sorted.set_index(x_col).resample('W')[numeric_columns].mean().reset_index()
                         elif user_aggregation == 'month':
-                            df_sorted = df_sorted.set_index(x_col).resample('M').mean().reset_index()
+                            df_sorted = df_sorted.set_index(x_col).resample('M')[numeric_columns].mean().reset_index()
                         elif user_aggregation == 'quarter':
-                            df_sorted = df_sorted.set_index(x_col).resample('Q').mean().reset_index()
+                            df_sorted = df_sorted.set_index(x_col).resample('Q')[numeric_columns].mean().reset_index()
                         elif user_aggregation == 'year':
-                            df_sorted = df_sorted.set_index(x_col).resample('Y').mean().reset_index()
+                            df_sorted = df_sorted.set_index(x_col).resample('Y')[numeric_columns].mean().reset_index()
 
                         aggregation_applied = True
                         aggregation_message = f"Data aggregated to {user_aggregation}ly level as selected"
@@ -311,37 +382,150 @@ def create_smart_chart(df, chart_type, chart_options):
         # Determine if we should add markers based on data size
         use_markers = len(df_sorted) < 100
 
-        # Create the chart - no color grouping
+        # Calculate statistics for summary
+        # Check if the dataframe is not empty and y_col exists and is numeric
+        if len(df_sorted) > 0 and y_col in df_sorted.columns:
+            # Check if the column is numeric
+            if pd.api.types.is_numeric_dtype(df_sorted[y_col]):
+                avg_value = df_sorted[y_col].mean()
+                max_value = df_sorted[y_col].max()
+                min_value = df_sorted[y_col].min()
+                last_value = df_sorted[y_col].iloc[-1] if len(df_sorted) > 0 else None
+            else:
+                # For non-numeric columns, we can't calculate statistics
+                avg_value = max_value = min_value = 0
+                last_value = None
+                st.warning(f"Column '{y_col}' is not numeric. Statistics cannot be calculated.")
+        else:
+            # If dataframe is empty or column doesn't exist
+            avg_value = max_value = min_value = 0
+            last_value = None
+
+        # Create the chart with enhanced data display
         fig = px.line(
             df_sorted,
             x=x_col,
             y=y_col,
             title=f'Trend of {y_col} over {x_col}',
-            markers=use_markers
+            markers=use_markers,
+            custom_data=[df_sorted[y_col]]  # Add custom data for enhanced hover
         )
+
+        # Add improved hover information
+        fig.update_traces(
+            hovertemplate='<b>%{x}</b><br>' +
+                          f'{y_col}: ' + '%{y:.2f}<extra></extra>'
+        )
+
+        # Add value labels for key points if dataset isn't too large
+        # Only add labels if the column is numeric
+        if len(df_sorted) > 0 and y_col in df_sorted.columns and pd.api.types.is_numeric_dtype(df_sorted[y_col]):
+            if len(df_sorted) < 50:
+                # Add all points
+                fig.update_traces(
+                    textposition="top center",
+                    texttemplate="%{y:.2f}",
+                    textfont=dict(size=10)
+                )
+            else:
+                # Add labels only for key points (min, max, last)
+                try:
+                    max_idx = df_sorted[y_col].idxmax()
+                    min_idx = df_sorted[y_col].idxmin()
+                    last_idx = df_sorted.index[-1]
+
+                    # Create unique indices list (in case min/max/last are the same point)
+                    key_indices = list(set([max_idx, min_idx, last_idx]))
+
+                    for idx in key_indices:
+                        try:
+                            point_x = df_sorted.loc[idx, x_col]
+                            point_y = df_sorted.loc[idx, y_col]
+                            label = "Max" if idx == max_idx else "Min" if idx == min_idx else "Latest"
+
+                            # Only add annotation if point_y is a number
+                            if pd.notnull(point_y) and isinstance(point_y, (int, float)):
+                                fig.add_annotation(
+                                    x=point_x,
+                                    y=point_y,
+                                    text=f"{label}: {point_y:.2f}",
+                                    showarrow=True,
+                                    arrowhead=2,
+                                    arrowsize=1,
+                                    arrowwidth=1,
+                                    arrowcolor="#636363",
+                                    font=dict(size=10, color="black"),
+                                    bgcolor="white",
+                                    bordercolor="#c7c7c7",
+                                    borderwidth=1,
+                                    borderpad=4
+                                )
+                        except Exception as e:
+                            # If there's an error with a specific point, skip it
+                            st.warning(f"Could not add label for a key point: {str(e)}")
+                            continue
+                except Exception as e:
+                    # If there's an error finding key points, skip the labeling
+                    st.warning(f"Could not identify key points for labeling: {str(e)}")
+                    pass
 
         # Improve layout with more space at the top to avoid overlapping with range selector buttons
         fig.update_layout(
             xaxis_title=x_col,
             yaxis_title=y_col,
-            margin=dict(t=70, b=50, l=20, r=20),  # Increased top margin to accommodate range selector
+            margin=dict(t=70, b=70, l=20, r=20),  # Increased margins to accommodate annotations
             hovermode="closest"
+        )
+
+        # Add summary statistics below the chart
+        # Format the last_value properly, handling None case
+        if last_value is not None:
+            last_value_text = f"{last_value:.2f}"
+        else:
+            last_value_text = "N/A"
+
+        fig.add_annotation(
+            text=f"Average: {avg_value:.2f} | Max: {max_value:.2f} | Min: {min_value:.2f} | Latest: {last_value_text}",
+            xref="paper", yref="paper",
+            x=0.5, y=-0.15,
+            showarrow=False,
+            font=dict(size=12, color="gray")
         )
 
         # Add annotation about data aggregation if applied - positioned to avoid overlap with range selector
         if aggregation_applied and aggregation_message:
-            # Add as a subtitle instead of an annotation to avoid overlap with range selector buttons
-            title = fig.layout.title.text if hasattr(fig.layout, 'title') and hasattr(fig.layout.title, 'text') else f'Trend of {y_col} over {x_col}'
-            subtitle = f"<br><span style='font-size:10px;color:gray'>{aggregation_message}</span>"
-            fig.update_layout(
-                title={
-                    'text': title + subtitle,
-                    'y': 0.95,  # Position the title a bit higher
-                    'x': 0.5,
-                    'xanchor': 'center',
-                    'yanchor': 'top'
-                }
-            )
+            try:
+                # Add as a subtitle instead of an annotation to avoid overlap with range selector buttons
+                # Get the current title text safely
+                current_title = f'Trend of {y_col} over {x_col}'
+                if hasattr(fig, 'layout') and hasattr(fig.layout, 'title'):
+                    if hasattr(fig.layout.title, 'text') and fig.layout.title.text:
+                        current_title = fig.layout.title.text
+
+                # Create the subtitle with the aggregation message
+                subtitle = f"<br><span style='font-size:10px;color:gray'>{aggregation_message}</span>"
+
+                # Update the title with the subtitle
+                fig.update_layout(
+                    title={
+                        'text': current_title + subtitle,
+                        'y': 0.95,  # Position the title a bit higher
+                        'x': 0.5,
+                        'xanchor': 'center',
+                        'yanchor': 'top'
+                    }
+                )
+            except Exception as e:
+                # If updating the title fails, add a separate annotation instead
+                st.warning(f"Could not update chart title: {str(e)}")
+                fig.add_annotation(
+                    text=aggregation_message,
+                    xref="paper", yref="paper",
+                    x=0.5, y=1.05,
+                    showarrow=False,
+                    font=dict(size=10, color="gray"),
+                    align="center"
+                )
 
         # Ensure x-axis labels are properly aligned
         if chart_type != "Time Series" and len(df_sorted[x_col].unique()) > 5:
@@ -372,8 +556,9 @@ def create_smart_chart(df, chart_type, chart_options):
         if aggregation_applied and aggregation_message:
             # Store the aggregation info in the figure's layout metadata
             # Use custom properties in layout that won't interfere with Plotly's functionality
+            # Avoid using underscore prefixes as they're not allowed in Plotly layout
             fig.update_layout(
-                _aggregation_info={
+                meta_aggregation_info={
                     "applied": True,
                     "message": aggregation_message
                 }
@@ -420,6 +605,11 @@ def create_smart_chart(df, chart_type, chart_options):
             size_col_to_use = None
 
         try:
+            # Calculate statistics for summary
+            avg_x = plot_df[x_col].mean()
+            avg_y = plot_df[y_col].mean()
+            corr = plot_df[[x_col, y_col]].corr().iloc[0, 1]
+
             # No color grouping - removed as requested
             if size_col_to_use:
                 fig = px.scatter(
@@ -428,7 +618,9 @@ def create_smart_chart(df, chart_type, chart_options):
                     y=y_col,
                     size=size_col_to_use,
                     title=f'{y_col} vs {x_col} (size: {size_col})',
-                    opacity=0.7
+                    opacity=0.7,
+                    trendline="ols",  # Add trendline
+                    custom_data=[plot_df.index]  # Add index for hover
                 )
             else:
                 fig = px.scatter(
@@ -436,15 +628,91 @@ def create_smart_chart(df, chart_type, chart_options):
                     x=x_col,
                     y=y_col,
                     title=f'{y_col} vs {x_col}',
-                    opacity=0.7
+                    opacity=0.7,
+                    trendline="ols",  # Add trendline
+                    custom_data=[plot_df.index]  # Add index for hover
                 )
 
-            # Add trendline
+            # Enhance hover information
+            for i in range(len(fig.data)):
+                if "trendline" not in fig.data[i].name:  # Skip trendline traces
+                    fig.data[i].hovertemplate = (
+                        f'<b>{x_col}</b>: %{{x:.2f}}<br>' +
+                        f'<b>{y_col}</b>: %{{y:.2f}}<br>' +
+                        (f'<b>{size_col}</b>: %{{marker.size}}<br>' if size_col_to_use else '') +
+                        '<extra></extra>'
+                    )
+
+            # Add labels for outlier points
+            if len(plot_df) < 100:  # Only for smaller datasets
+                # Calculate z-scores to find outliers
+                from scipy import stats
+
+                try:
+                    # Calculate z-scores for both x and y
+                    z_scores_x = np.abs(stats.zscore(plot_df[x_col]))
+                    z_scores_y = np.abs(stats.zscore(plot_df[y_col]))
+
+                    # Find points that are outliers in either dimension
+                    outlier_indices = np.where((z_scores_x > 2.5) | (z_scores_y > 2.5))[0]
+
+                    # Add annotations for outliers
+                    for idx in outlier_indices:
+                        point_x = plot_df.iloc[idx][x_col]
+                        point_y = plot_df.iloc[idx][y_col]
+
+                        fig.add_annotation(
+                            x=point_x,
+                            y=point_y,
+                            text=f"({point_x:.1f}, {point_y:.1f})",
+                            showarrow=True,
+                            arrowhead=2,
+                            arrowsize=1,
+                            arrowwidth=1,
+                            arrowcolor="#636363",
+                            font=dict(size=9, color="black"),
+                            bgcolor="white",
+                            bordercolor="#c7c7c7",
+                            borderwidth=1,
+                            borderpad=2
+                        )
+                except:
+                    # If z-score calculation fails, skip outlier detection
+                    pass
+
+            # Add trendline equation and correlation
+            if len(plot_df) >= 2:  # Need at least 2 points for correlation
+                # Format correlation coefficient
+                corr_text = f"Correlation: {corr:.2f}"
+
+                # Add correlation annotation
+                fig.add_annotation(
+                    xref="paper", yref="paper",
+                    x=0.02, y=0.98,
+                    text=corr_text,
+                    showarrow=False,
+                    font=dict(size=12),
+                    bgcolor="rgba(255, 255, 255, 0.8)",
+                    bordercolor="rgba(0, 0, 0, 0.3)",
+                    borderwidth=1,
+                    borderpad=4
+                )
+
+            # Improve layout
             fig.update_layout(
                 xaxis_title=x_col,
                 yaxis_title=y_col,
-                margin=dict(t=50, b=50, l=20, r=20),
+                margin=dict(t=50, b=70, l=20, r=20),
                 hovermode="closest"
+            )
+
+            # Add summary statistics below the chart
+            fig.add_annotation(
+                text=f"Avg {x_col}: {avg_x:.2f} | Avg {y_col}: {avg_y:.2f} | Correlation: {corr:.2f}",
+                xref="paper", yref="paper",
+                x=0.5, y=-0.15,
+                showarrow=False,
+                font=dict(size=12, color="gray")
             )
 
             return fig
@@ -479,21 +747,48 @@ def create_smart_chart(df, chart_type, chart_options):
             aggfunc='mean'
         ).fillna(0)
 
-        # Create heatmap
+        # Calculate statistics for summary
+        avg_value = pivot_df.mean().mean()
+        max_value = pivot_df.max().max()
+        min_value = pivot_df.min().min()
+
+        # Create heatmap with enhanced value display
         fig = px.imshow(
             pivot_df,
             labels=dict(x=x_col, y=y_col, color=value_col),
             x=pivot_df.columns,
             y=pivot_df.index,
             title=f'Heatmap of {value_col} by {x_col} and {y_col}',
-            color_continuous_scale='Viridis'
+            color_continuous_scale='Viridis',
+            text_auto=True  # Automatically add text values
+        )
+
+        # Format the text values
+        fig.update_traces(
+            texttemplate="%{z:.2f}",
+            textfont={"size": 10, "color": "white"},
+            hovertemplate=(
+                f"<b>{x_col}</b>: %{{x}}<br>" +
+                f"<b>{y_col}</b>: %{{y}}<br>" +
+                f"<b>{value_col}</b>: %{{z:.2f}}<br>" +
+                "<extra></extra>"
+            )
         )
 
         # Improve layout
         fig.update_layout(
-            margin=dict(t=50, b=50, l=20, r=20),
+            margin=dict(t=50, b=70, l=20, r=20),
             xaxis_title=x_col,
             yaxis_title=y_col
+        )
+
+        # Add summary statistics below the chart
+        fig.add_annotation(
+            text=f"Average: {avg_value:.2f} | Max: {max_value:.2f} | Min: {min_value:.2f}",
+            xref="paper", yref="paper",
+            x=0.5, y=-0.15,
+            showarrow=False,
+            font=dict(size=12, color="gray")
         )
 
         return fig
@@ -505,36 +800,103 @@ def create_smart_chart(df, chart_type, chart_options):
         if not x_col or not y_col:
             return None
 
+        # Create box plot with enhanced value display
         fig = px.box(
             df,
             x=x_col,
             y=y_col,
             title=f'Box Plot of {y_col} by {x_col}',
             points='all',  # Show all points
-            notched=True   # Show confidence interval around median
+            notched=True,  # Show confidence interval around median
+            hover_data=[y_col]  # Add y_col to hover data for better tooltips
+        )
+
+        # Enhance hover information
+        fig.update_traces(
+            hovertemplate=(
+                f"<b>{x_col}</b>: %{{x}}<br>" +
+                f"<b>{y_col}</b>: %{{y:.2f}}<br>" +
+                "<extra></extra>"
+            ),
+            # Make points more visible
+            marker=dict(
+                opacity=0.7,
+                size=6
+            )
         )
 
         # Improve layout
         fig.update_layout(
             xaxis_title=x_col,
             yaxis_title=y_col,
-            margin=dict(t=50, b=50, l=20, r=20)
+            margin=dict(t=50, b=100, l=20, r=20)  # Increased bottom margin for statistics
         )
 
-        # Add summary statistics
+        # Add comprehensive summary statistics for each category
+        all_stats = []
         for category in df[x_col].unique():
             subset = df[df[x_col] == category][y_col]
             if not subset.empty:
+                # Calculate detailed statistics
+                count = len(subset)
                 median = subset.median()
                 mean = subset.mean()
+                q1 = subset.quantile(0.25)
+                q3 = subset.quantile(0.75)
+                iqr = q3 - q1
+                min_val = subset.min()
+                max_val = subset.max()
+                std_dev = subset.std()
+
+                # Add annotation above each box
                 fig.add_annotation(
                     x=category,
-                    y=subset.max(),
-                    text=f"Mean: {mean:.2f}<br>Median: {median:.2f}",
+                    y=max_val,
+                    text=f"Median: {median:.2f}<br>Mean: {mean:.2f}",
                     showarrow=True,
                     arrowhead=1,
-                    yshift=10
+                    yshift=10,
+                    font=dict(size=10),
+                    bgcolor="rgba(255, 255, 255, 0.8)",
+                    bordercolor="rgba(0, 0, 0, 0.3)",
+                    borderwidth=1,
+                    borderpad=4
                 )
+
+                # Store statistics for overall summary
+                all_stats.append({
+                    'Category': category,
+                    'Count': count,
+                    'Mean': mean,
+                    'Median': median,
+                    'StdDev': std_dev,
+                    'Min': min_val,
+                    'Max': max_val,
+                    'IQR': iqr
+                })
+
+        # Add overall summary statistics below the chart
+        if all_stats:
+            # Create a summary table as text
+            summary_text = "<br>".join([
+                f"<b>{stat['Category']}</b>: Count={stat['Count']}, Mean={stat['Mean']:.2f}, "
+                f"Median={stat['Median']:.2f}, StdDev={stat['StdDev']:.2f}, "
+                f"Min={stat['Min']:.2f}, Max={stat['Max']:.2f}"
+                for stat in all_stats
+            ])
+
+            fig.add_annotation(
+                xref="paper", yref="paper",
+                x=0.5, y=-0.2,
+                text=summary_text,
+                showarrow=False,
+                font=dict(size=10, color="black"),
+                align="center",
+                bgcolor="rgba(240, 240, 240, 0.8)",
+                bordercolor="rgba(0, 0, 0, 0.3)",
+                borderwidth=1,
+                borderpad=5
+            )
 
         return fig
 
@@ -549,6 +911,13 @@ def create_smart_chart(df, chart_type, chart_options):
         # Aggregate data
         agg_df = df.groupby([x_col, color_col])[y_col].sum().reset_index()
 
+        # Calculate statistics for summary
+        total_value = agg_df[y_col].sum()
+        avg_value = agg_df[y_col].mean()
+
+        # Calculate totals per x category for annotations
+        totals_per_category = agg_df.groupby(x_col)[y_col].sum().reset_index()
+
         fig = px.bar(
             agg_df,
             x=x_col,
@@ -556,23 +925,55 @@ def create_smart_chart(df, chart_type, chart_options):
             color=color_col,
             title=f'{y_col} by {x_col} and {color_col}',
             barmode='stack',
-            text=y_col  # Add value labels
+            text=y_col,  # Add value labels
+            custom_data=[agg_df[y_col]]  # Add custom data for enhanced hover
         )
 
-        # Format the text labels
+        # Format the text labels with improved visibility
         fig.update_traces(
-            texttemplate='%{y:.2f}',
+            texttemplate='%{y:.1f}',
             textposition='inside',
-            insidetextfont=dict(color='white', size=10)
+            insidetextfont=dict(color='white', size=10, family="Arial"),
+            hovertemplate=(
+                f"<b>{x_col}</b>: %{{x}}<br>" +
+                f"<b>{color_col}</b>: %{{fullData.name}}<br>" +
+                f"<b>{y_col}</b>: %{{y:.2f}}<br>" +
+                f"<b>Percentage of Total</b>: %{{customdata[0] / {total_value} * 100:.1f}}%<br>" +
+                "<extra></extra>"
+            )
         )
 
-        # Improve layout
+        # Add total value annotations at the top of each stacked bar
+        for i, row in totals_per_category.iterrows():
+            fig.add_annotation(
+                x=row[x_col],
+                y=row[y_col],
+                text=f"Total: {row[y_col]:.1f}",
+                showarrow=False,
+                yshift=10,
+                font=dict(size=11, color="black"),
+                bgcolor="rgba(255, 255, 255, 0.8)",
+                bordercolor="rgba(0, 0, 0, 0.3)",
+                borderwidth=1,
+                borderpad=2
+            )
+
+        # Improve layout with more information
         fig.update_layout(
             xaxis_title=x_col,
             yaxis_title=y_col,
             legend_title=color_col,
             margin=dict(t=50, b=100, l=20, r=20),
             legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+        )
+
+        # Add summary statistics below the chart
+        fig.add_annotation(
+            text=f"Total: {total_value:.2f} | Average per Category: {avg_value:.2f}",
+            xref="paper", yref="paper",
+            x=0.5, y=-0.15,
+            showarrow=False,
+            font=dict(size=12, color="gray")
         )
 
         # Ensure x-axis labels are properly aligned
@@ -970,7 +1371,8 @@ def show_smart_visualizations(df, numeric_cols, categorical_cols):
                 # Use a try-except block to handle cases where layout properties might not exist
                 try:
                     if hasattr(fig, 'layout') and hasattr(fig.layout, 'get'):
-                        agg_info = fig.layout.get('_aggregation_info', {})
+                        # Try to get the meta_aggregation_info property
+                        agg_info = fig.layout.get('meta_aggregation_info', {})
                         if isinstance(agg_info, dict) and agg_info.get('applied', False):
                             aggregation_message = agg_info.get('message', '')
                             if aggregation_message:
@@ -978,8 +1380,9 @@ def show_smart_visualizations(df, numeric_cols, categorical_cols):
 
                                 **Data Handling:** {aggregation_message}
                                 """
-                except Exception:
+                except Exception as e:
                     # If accessing the layout properties fails, just continue without the aggregation message
+                    # st.warning(f"Could not access aggregation info: {str(e)}")
                     pass
 
                 st.markdown(description)

@@ -29,6 +29,7 @@ from visualizations.smart_visuals import show_smart_visualizations
 
 # Import analytics modules
 from analytics.statistical import show_advanced_analytics
+from analytics.growth_analysis import show_growth_analysis
 
 # Import forecasting modules
 from forecasting.forecasting import show_forecasting
@@ -249,6 +250,22 @@ if uploaded_file is not None:
 
         elif selected_section == "Advanced Analytics":
             show_advanced_analytics(df, numeric_cols, categorical_cols)
+
+        elif selected_section == "Growth Trends":
+            # Add an info note about growth analysis
+            with st.expander("About Growth Trends Analysis", expanded=True):
+                st.markdown("""
+                **Growth Trends Analysis** helps you understand year-over-year changes in your data:
+
+                - Calculate yearly growth (delta) and growth percentage
+                - Detect trends and unusual patterns
+                - Compare actual values against claimed forecasts
+                - Generate simple predictions for future periods
+
+                This analysis is particularly useful for financial metrics and performance indicators.
+                """)
+
+            show_growth_analysis(df, numeric_cols)
 
         elif selected_section == "Forecasting":
             show_forecasting(df, numeric_cols)

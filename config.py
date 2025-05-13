@@ -38,8 +38,8 @@ APP_LAYOUT = "wide"
 INITIAL_SIDEBAR_STATE = "expanded"
 
 # Navigation options
-NAV_OPTIONS = ["Data Preview", "Statistical Details", "Data Visualization", "Smart Visuals", "Advanced Analytics", "Forecasting"]
-NAV_ICONS = ["table", "calculator", "bar-chart-fill", "magic", "graph-up", "calendar-check"]
+NAV_OPTIONS = ["Data Preview", "Statistical Details", "Data Visualization", "Smart Visuals", "Advanced Analytics", "Growth Trends", "Forecasting"]
+NAV_ICONS = ["table", "calculator", "bar-chart-fill", "magic", "graph-up", "arrow-up-right", "calendar-check"]
 
 # Visualization settings
 VIZ_TABS = ["Numeric", "Categorical", "Relationships", "Rich Visuals"]
