@@ -269,5 +269,16 @@ if uploaded_file is not None:
 
         elif selected_section == "Forecasting":
             show_forecasting(df, numeric_cols)
+        elif selected_section == "Agentic Analysis":
+            st.markdown(
+                """
+                <div style="text-align:center; margin-top:2em;">
+                    <a href="http://localhost:5173/" target="_blank" style="font-size:1.2em; font-weight:bold; color:#2563eb;">
+                        🚀 Open Agentic Analysis (new tab)
+                    </a>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 else:
     st.info("Please upload an Excel file to begin.")
