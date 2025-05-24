@@ -34,6 +34,9 @@ from analytics.growth_analysis import show_growth_analysis
 # Import forecasting modules
 from forecasting.forecasting import show_forecasting
 
+# Import PDF report module
+from reports.pdf_report import show_pdf_reports
+
 # Set page configuration
 st.set_page_config(
     page_title=APP_TITLE,
@@ -269,6 +272,9 @@ if uploaded_file is not None:
 
         elif selected_section == "Forecasting":
             show_forecasting(df, numeric_cols)
+
+        elif selected_section == "PDF Reports":
+            show_pdf_reports(df, st.session_state.file_name, numeric_cols, categorical_cols)
         elif selected_section == "Agentic Analysis":
             st.markdown(
                 """
