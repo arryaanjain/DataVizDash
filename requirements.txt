@@ -31,4 +31,7 @@ holidays>=0.25
 cmdstanpy>=1.0.4
 pystan>=3.5.0
 
+# PDF generation
+fpdf2>=2.7.0
+
 # Note: We need to specify these dependencies to ensure proper installation on Streamlit Cloud
